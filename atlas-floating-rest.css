@@ -1,0 +1,10 @@
+#atlas-floating-rest{position:fixed;bottom:calc(63px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:70;width:min(calc(100% - 16px),720px);padding:9px 11px;background:#152a33;border:1px solid #617782;border-radius:16px;box-shadow:0 7px 24px #0009;color:#fff}
+#atlas-floating-rest[hidden]{display:none}
+.atlas-floating-info{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.atlas-floating-info small{font-size:10px;color:#b4c4cb;letter-spacing:.04em}
+.atlas-floating-info strong{font-size:23px;color:#dfff00;font-variant-numeric:tabular-nums}
+.atlas-floating-info span{font-size:12px;color:#b4c4cb;font-variant-numeric:tabular-nums}
+.atlas-floating-actions{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;margin-top:6px}
+.atlas-floating-actions button{border:1px solid #51646e;background:#30444e;color:#f4f4f0;border-radius:8px;padding:9px 2px;font-size:12px;font-weight:650;cursor:pointer}
+.atlas-floating-actions button:active{background:#dfff00;color:#101820}
+@media(max-width:365px){.atlas-floating-actions button{font-size:11px}.atlas-floating-info span{font-size:11px}}
