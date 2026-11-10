@@ -82,7 +82,11 @@ renderExercises=function(){
   routine[selected].ex.forEach(([name,n,reps],i)=>{
     const prior=lastExercise(name),block=el("div","exercise");
     const header=el("div","at-v2-head");const heading=el("h3",null,name);
-    const musclesChip=el("span","at-v2-pill",muscleFor(name));header.append(heading,musclesChip);block.append(header);
+    const musclesChip=el("span","at-v2-pill",muscleFor(name));
+    const guide=el("button","at-v3-guide-button","ⓘ Como fazer");
+    guide.type="button";guide.setAttribute("aria-label","Ver como executar "+name);
+    guide.onclick=()=>{if(typeof window.atlasGuide==="function")window.atlasGuide(name,muscleFor(name));else notice("Guia indisponível, tente atualizar o aplicativo.");};
+    header.append(heading,guide,musclesChip);block.append(header);
     const info=el("div","at-v2-tip",n+" séries · "+reps+" reps"+(prior.date?" · anterior: "+new Date(prior.date).toLocaleDateString("pt-BR"):""));block.append(info);
     const priorBest=oldBest(name);
     const bestLabel=el("div","at-v2-muted",priorBest>0?"Recorde independente: "+priorBest.toLocaleString("pt-BR")+" kg":"Sem recorde independente registrado");block.append(bestLabel);
@@ -96,18 +100,25 @@ renderExercises=function(){
     const headingRow=el("div","at-v2-setrow muted");["Nº","Carga (kg)","Reps + 🤝","✓"].forEach(t=>headingRow.append(el("span",null,t)));block.append(headingRow);
     for(let j=0;j<n;j++){
       const key=i+"-"+j,v=draft[key]||{},previousSet=prior.sets.find(x=>Number(x.set)===j+1);
+      const folder=el("details","at-v3-series-folder");
+      folder.open=!v.done;
+      const summary=el("summary","at-v3-series-summary");
+      function updateFolderSummary(){const current=(db.drafts[selected]||{})[key]||{};
+        summary.textContent=(j+1)+"ª série · "+(current.done?"✓ Concluída · ":"Em andamento · ")+(current.kg??"—")+" kg × "+(current.reps??"—")+" reps"+(current.assisted?" · 🤝":"");
+      }
+      updateFolderSummary();folder.append(summary);
       const row=el("div","at-v2-setrow"),setNum=el("span","at-v2-muted",j+1);row.append(setNum);
       const kg=el("input");kg.type="number";kg.min="0";kg.max="500";kg.step=".5";kg.value=v.kg??"";kg.placeholder="kg";kg.setAttribute("aria-label",name+" série "+(j+1)+" carga");kg.onchange=()=>setDraft(i,j,"kg",kg.value===""?"":Number(kg.value));row.append(kg);
       const repsBox=el("div","at-v2-reps");const repsIn=el("input");repsIn.type="number";repsIn.min="0";repsIn.max="100";repsIn.step="1";repsIn.placeholder="reps";repsIn.value=v.reps??"";repsIn.setAttribute("aria-label",name+" série "+(j+1)+" repetições");repsIn.onchange=()=>setDraft(i,j,"reps",repsIn.value===""?"":Number(repsIn.value));
       const help=el("button","at-v2-assist","🤝");help.type="button";help.setAttribute("aria-pressed",String(v.assisted===true));help.setAttribute("aria-label",name+" série "+(j+1)+" marcar auxílio");help.title=v.assisted?"Com ajuda":"Sem ajuda";help.onclick=()=>{const next=help.getAttribute("aria-pressed")!=="true";help.setAttribute("aria-pressed",String(next));help.title=next?"Com ajuda":"Sem ajuda";setDraft(i,j,"assisted",next);};repsBox.append(repsIn,help);row.append(repsBox);
       const check=el("input");check.type="checkbox";check.checked=!!v.done;check.setAttribute("aria-label",name+" série "+(j+1)+" concluída");
-      check.onchange=()=>{setDraft(i,j,"done",check.checked);if(check.checked){if(!db.timer.startedAt&&!db.timer.elapsed){db.timer.startedAt=Date.now();persist();showClock();}const nextType=(draft[i+"-"+(j+1)]||{}).type;if(nextType!=="dropset"&&v.type!=="dropset")beginAutoRest(db.restByExercise[name]??db.config.defaultRest);const p=priorBest;if(Number(kg.value)>p&&v.assisted!==true&&v.type!=="aquecimento"&&Number(kg.value)>0)notice("Possível novo recorde de carga independente! 🏆");}};
-      row.append(check);block.append(row);
+      check.onchange=()=>{setDraft(i,j,"done",check.checked);updateFolderSummary();folder.open=!check.checked;if(check.checked){if(!db.timer.startedAt&&!db.timer.elapsed){db.timer.startedAt=Date.now();persist();showClock();}const nextType=(draft[i+"-"+(j+1)]||{}).type;if(nextType!=="dropset"&&v.type!=="dropset")beginAutoRest(db.restByExercise[name]??db.config.defaultRest);const p=priorBest;if(Number(kg.value)>p&&v.assisted!==true&&v.type!=="aquecimento"&&Number(kg.value)>0)notice("Possível novo recorde de carga independente! 🏆");}};
+      row.append(check);folder.append(row);
       const previousLine=el("div","at-v2-prior");
-      if(previousSet){const previousButton=el("button",null,"↶ Anterior "+(previousSet.kg??"—")+" kg × "+(previousSet.reps??"—")+" reps"+(previousSet.assisted===true?" · 🤝":previousSet.assisted===false?" · sozinho":""));previousButton.type="button";previousButton.onclick=()=>{if(previousSet.kg!==null&&previousSet.kg!==undefined)setDraft(i,j,"kg",previousSet.kg);if(previousSet.reps!==null&&previousSet.reps!==undefined)setDraft(i,j,"reps",previousSet.reps);renderExercises();notice("Valores anteriores copiados.");};previousLine.append(previousButton);}else previousLine.textContent="Anterior: sem registro desta série";block.append(previousLine);
+      if(previousSet){const previousButton=el("button",null,"↶ Anterior "+(previousSet.kg??"—")+" kg × "+(previousSet.reps??"—")+" reps"+(previousSet.assisted===true?" · 🤝":previousSet.assisted===false?" · sozinho":""));previousButton.type="button";previousButton.onclick=()=>{if(previousSet.kg!==null&&previousSet.kg!==undefined)setDraft(i,j,"kg",previousSet.kg);if(previousSet.reps!==null&&previousSet.reps!==undefined)setDraft(i,j,"reps",previousSet.reps);renderExercises();notice("Valores anteriores copiados.");};previousLine.append(previousButton);}else previousLine.textContent="Anterior: sem registro desta série";folder.append(previousLine);
       const types=el("div","at-v2-extras"),sel=el("select","at-v2-type");[["normal","Normal"],["aquecimento","Aquecimento"],["falha","Até a falha"],["dropset","Drop set"]].forEach(([value,txt])=>{const op=el("option",null,txt);op.value=value;sel.append(op);});sel.value=v.type||"normal";sel.setAttribute("aria-label","Tipo de série "+(j+1));sel.onchange=()=>setDraft(i,j,"type",sel.value);
       const rpe=el("input","at-v2-rpe");rpe.type="number";rpe.min="1";rpe.max="10";rpe.step=".5";rpe.placeholder="RPE";rpe.value=v.rpe??"";rpe.setAttribute("aria-label",name+" série "+(j+1)+" esforço percebido RPE");rpe.onchange=()=>setDraft(i,j,"rpe",rpe.value===""?null:Number(rpe.value));
-      types.append(sel,el("span","at-v2-muted","RPE"),rpe);block.append(types);
+      types.append(sel,el("span","at-v2-muted","RPE"),rpe);folder.append(types);block.append(folder);
     }
     const bottom=el("div","at-v2-toolbar");
     const add=el("button",null,"+ Série");add.onclick=()=>{if(n>=15){notice("Limite de 15 séries por exercício.");return;}routine[selected].ex[i][1]=n+1;saveTemplates();renderExercises();};
