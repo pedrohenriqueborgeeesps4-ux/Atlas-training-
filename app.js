@@ -126,6 +126,7 @@ function renderSummary(){
    $("remaining").textContent=Math.abs(goal-latest)<.05?"Meta alcançada!":Math.abs(goal-latest).toFixed(1).replace(".",",")+" kg "+(goal>latest?"até sua meta de ganho":"de diferença para sua meta");
  }
  $("sessionsCount").textContent=db.sessions.length;
+ const frequency=$("plannedFrequency");if(frequency)frequency.textContent=String(db.profile?.frequency||5);
 }
 function monday(){const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()-(d.getDay()+6)%7+weekOffset*7);return d;}
 function renderCalendar(){$("calendar").replaceChildren();const base=monday(),counts={feito:0,falta:0,descanso:0};["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"].forEach((name,i)=>{const d=new Date(base);d.setDate(base.getDate()+i);const key=dateKey(d),state=db.attendance[key]||"pendente";if(state in counts)counts[state]++;const b=document.createElement("button");b.className="date "+state;b.textContent=name+" "+d.getDate()+" "+({feito:"✓",falta:"×",descanso:"—",pendente:"·"}[state]);b.setAttribute("aria-label",key+" "+state);b.onclick=()=>{const seq=["pendente","feito","falta","descanso"];const next=seq[(seq.indexOf(db.attendance[key]||"pendente")+1)%4];if(next==="pendente")delete db.attendance[key];else db.attendance[key]=next;persist();renderCalendar();};$("calendar").append(b);});$("weekSummary").textContent=counts.feito+" realizados · "+counts.falta+" faltas · "+counts.descanso+" descansos";};
