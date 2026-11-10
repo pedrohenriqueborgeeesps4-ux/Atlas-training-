@@ -1,6 +1,6 @@
 "use strict";
-const CACHE="atlas-training-static-v2";
-const ASSETS=["./","./index.html","./app.js","./atlas-enhancements.js","./atlas-analytics.js","./atlas-enhancements.css","./manifest.webmanifest","./icon.svg"];
+const CACHE="atlas-training-static-v3";
+const ASSETS=["./","./index.html","./app.js","./atlas-enhancements.js","./atlas-analytics.js","./atlas-tools.js","./atlas-enhancements.css","./manifest.webmanifest","./icon.svg"];
 self.addEventListener("install",event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)));
   self.skipWaiting();
