@@ -30,7 +30,7 @@ const utilities=el("div","card");utilities.append(el("h2",null,"Exportar histór
 const csv=el("button","at-v2-btn","Baixar treinos em CSV");csv.onclick=()=>{
   const lines=[["Data","Ficha","Exercício","Série","Carga kg","Repetições","Ajuda","Tipo","RPE","Duração segundos"]];
   db.sessions.forEach(s=>setsOf(s).forEach(v=>lines.push([date(s.date),s.routineTitle||routine[s.day]?.title||"Treino",v.name||"",v.set??"",v.kg??"",v.reps??"",v.assisted===true?"Sim":v.assisted===false?"Não":"Não registrado",v.type||"Normal",v.rpe??"",s.seconds??""])));
-  const csvText="\uFEFF"+lines.map(row=>row.map(val=>'"'+String(val).replace(/"/g,'""')+'"').join(";")).join("\r\n");
+  const csvText="\uFEFF"+lines.map(row=>row.map(val=>{let cell=String(val);if(/^[=+@\-\t\r\n]/.test(cell))cell="'"+cell;return '"'+cell.replace(/"/g,'""')+'"';}).join(";")).join("\r\n");
   const blob=new Blob([csvText],{type:"text/csv;charset=utf-8"}),a=document.createElement("a");
   a.href=URL.createObjectURL(blob);a.download="atlas-treinos.csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000);
 };
