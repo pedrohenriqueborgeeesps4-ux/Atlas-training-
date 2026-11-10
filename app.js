@@ -8,8 +8,9 @@ const routine=[
 {day:6,title:"Posteriores, glúteos e panturrilhas",ex:[["Stiff",3,"8–10"],["Mesa flexora",3,"10–12"],["Agachamento búlgaro",3,"8–12"],["Cadeira flexora",2,"10–15"],["Elevação pélvica",3,"8–12"],["Panturrilha sentado",4,"12–15"]]}
 ];
 const STORE="atlas-training-v1";
-let db={weights:[{date:new Date().toISOString(),kg:85}],sessions:[],attendance:{},measures:[],drafts:{},timer:{elapsed:0,startedAt:null}};
+let db={weights:[],sessions:[],attendance:{},measures:[],drafts:{},timer:{elapsed:0,startedAt:null}};
 try{const saved=localStorage.getItem(STORE);if(saved){const obj=JSON.parse(saved);if(obj&&Array.isArray(obj.weights)&&Array.isArray(obj.sessions)&&obj.attendance&&typeof obj.attendance==="object")db={...db,...obj,timer:{...db.timer,...obj.timer}};}}catch(e){}
+if(!db.profile||typeof db.profile!=="object")db.profile={goal:db.weights.length?94:null};
 let selected=0,weekOffset=0,restEnd=0,restTimer=null;
 function notice(msg){$("status").textContent=msg;}
 function persist(){try{localStorage.setItem(STORE,JSON.stringify(db));}catch(e){notice("Não foi possível salvar. Exporte um backup.");}renderSummary();}
@@ -108,7 +109,24 @@ $("finishWorkout").onclick=()=>{
   notice("Treino salvo: "+sets.length+" séries, "+format(seconds)+".");
 };
 $("saveWeight").onclick=()=>{const kg=Number($("bodyWeight").value);if(!Number.isFinite(kg)||kg<30||kg>300){notice("Digite peso válido entre 30 e 300 kg.");return;}db.weights.push({date:new Date().toISOString(),kg});$("bodyWeight").value="";persist();notice("Peso salvo.");};
-function renderSummary(){const w=db.weights.at(-1)?.kg??85;$("currentWeight").textContent=w.toLocaleString("pt-BR")+" kg";$("remaining").textContent=w>=94?"Meta alcançada!":(94-w).toFixed(1).replace(".",",")+" kg até a meta";$("weightProgress").style.width=Math.min(100,Math.max(0,(w-85)/9*100))+"%";$("sessionsCount").textContent=db.sessions.length;}
+function renderSummary(){
+ const latest=db.weights.length?Number(db.weights.at(-1)?.kg):null;
+ const goal=Number(db.profile?.goal)||null;
+ $("currentWeight").textContent=latest!==null&&Number.isFinite(latest)?latest.toLocaleString("pt-BR")+" kg":"— kg";
+ const targetLabel=$("goalWeight");
+ if(targetLabel)targetLabel.textContent=goal?goal.toLocaleString("pt-BR")+" kg":"Defina sua meta";
+ if(!goal||latest===null||!Number.isFinite(latest)){
+   $("remaining").textContent="Registre seu peso e sua meta para acompanhar sua evolução.";
+   $("weightProgress").style.width="0%";
+ }else{
+   const baseline=Number(db.profile?.startingWeight)||Number(db.weights[0]?.kg)||latest;
+   const denominator=goal-baseline;
+   const pct=Math.abs(denominator)<0.01?(latest===goal?100:0):Math.max(0,Math.min(100,(latest-baseline)/denominator*100));
+   $("weightProgress").style.width=pct+"%";
+   $("remaining").textContent=Math.abs(goal-latest)<.05?"Meta alcançada!":Math.abs(goal-latest).toFixed(1).replace(".",",")+" kg "+(goal>latest?"até sua meta de ganho":"de diferença para sua meta");
+ }
+ $("sessionsCount").textContent=db.sessions.length;
+}
 function monday(){const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()-(d.getDay()+6)%7+weekOffset*7);return d;}
 function renderCalendar(){$("calendar").replaceChildren();const base=monday(),counts={feito:0,falta:0,descanso:0};["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"].forEach((name,i)=>{const d=new Date(base);d.setDate(base.getDate()+i);const key=dateKey(d),state=db.attendance[key]||"pendente";if(state in counts)counts[state]++;const b=document.createElement("button");b.className="date "+state;b.textContent=name+" "+d.getDate()+" "+({feito:"✓",falta:"×",descanso:"—",pendente:"·"}[state]);b.setAttribute("aria-label",key+" "+state);b.onclick=()=>{const seq=["pendente","feito","falta","descanso"];const next=seq[(seq.indexOf(db.attendance[key]||"pendente")+1)%4];if(next==="pendente")delete db.attendance[key];else db.attendance[key]=next;persist();renderCalendar();};$("calendar").append(b);});$("weekSummary").textContent=counts.feito+" realizados · "+counts.falta+" faltas · "+counts.descanso+" descansos";};
 $("previousWeek").onclick=()=>{weekOffset--;renderCalendar();};$("followingWeek").onclick=()=>{weekOffset++;renderCalendar();};$("currentWeek").onclick=()=>{weekOffset=0;renderCalendar();};
