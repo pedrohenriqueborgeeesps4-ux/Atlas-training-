@@ -1,3 +1,19 @@
+
+## Atlas Training v2 — aprimoramentos inspirados em fluxos públicos do Hevy
+Implementação independente, sem código ou marca Hevy.
+- Biblioteca pesquisável por músculo e exercícios personalizados.
+- Fichas editáveis: adicionar, reordenar, remover exercícios e alterar número de séries.
+- Desempenho anterior por série, copiar pesos/repetições, registro de ajuda 🤝 preservado.
+- Tipos de série (normal, aquecimento, até a falha, drop set), RPE e observações por exercício e por sessão.
+- Meta de carga, sugestão de progressão, alerta de recorde de carga independente, descanso automático personalizável.
+- Gráficos locais de cargas, estatísticas de volume/tempo, séries por músculo e exportação de histórico CSV.
+- Calculadora de anilhas e sugestão básica de aquecimento.
+- Correção e exclusão de sessões salvas com confirmação.
+
+**Os modelos novos não substituem seu histórico:** registros antigos permanecem no formato anterior, e novas propriedades são opcionais. Todas as funcionalidades ainda precisam de testes no Safari do iPhone, e falhas são possíveis. Faça backup antes de usar a versão nova.
+
+**Ainda não incluído**: feed social, rankings, Apple Watch, sincronização em nuvem, fotos pessoais, supersets e a conexão OAuth Spotify. A marcação de séries com ajuda, o calendário de faltas e os cronômetros exclusivos do Atlas continuam preservados. Essas integrações exigem trabalho e testes separados.
+
 # Atlas Training — PWA pessoal
 
 Aplicativo web instalável para controlar treinos, frequência, pesos, medidas e duração das sessões.
