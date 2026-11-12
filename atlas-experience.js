@@ -241,26 +241,58 @@
   function routinePreview(index) {
     previewIndex=index; renderRoutines(); window.scrollTo(0,0);
   }
+  function deleteRoutine(index) {
+    const item = routine[index];
+    if (!item) return;
+    if (db.activeRoutine === index) {
+      notice("Finalize o treino em andamento antes de apagar esta rotina.");
+      return;
+    }
+    const pending = Object.keys(db.drafts[index] || {}).length > 0;
+    if (!confirm('Apagar a rotina "' + item.title + '"?' +
+      (pending ? "\nAs séries ainda não salvas desta ficha também serão apagadas." : "") +
+      "\nSeu histórico de treinos concluídos será mantido.")) return;
+    const reindex = source => Object.fromEntries(Object.entries(source || {})
+      .filter(([key]) => Number(key) !== index)
+      .map(([key, value]) => [Number(key) > index ? Number(key) - 1 : key, value]));
+    const sessions = db.sessions.map(session => ({
+      ...session,
+      routineTitle: session.routineTitle || routine[session.day]?.title || "Treino",
+      day: session.day === index ? null : session.day > index ? session.day - 1 : session.day
+    }));
+    const templates = routine.filter((_, i) => i !== index);
+    const next = {...db, templates, sessions, drafts: reindex(db.drafts), workoutNotes: reindex(db.workoutNotes)};
+    if (Number.isInteger(next.activeRoutine) && next.activeRoutine > index) next.activeRoutine--;
+    try { localStorage.setItem(STORE, JSON.stringify(next)); }
+    catch { notice("Não foi possível apagar a rotina. Tente novamente."); return; }
+    db = next;
+    routine.splice(0, routine.length, ...templates);
+    selected = selected > index ? selected - 1 : selected === index ? Math.min(index, Math.max(0, routine.length - 1)) : selected;
+    previewIndex = null;
+    builder = null;
+    renderDays(); renderExercises(); renderRoutines();
+    notice("Rotina apagada. Seu histórico foi preservado.");
+  }
   function renderRoutines() {
     training.replaceChildren(make("h2", "Treino"));
     if (routineTab === "Montar") {renderBuilder();return;}
     if (previewIndex !== null && routine[previewIndex]) {
       const item=routine[previewIndex], index=previewIndex;
       training.append(button("← Rotinas",()=>{previewIndex=null;renderRoutines();},"atlas-back"));
-      training.append(make("h2",item.title),make("p",item.ex.length+" exercícios · "+item.ex.reduce((n,ex)=>n+ex[1],0)+" séries","muted"));
+      training.append(make("h2",item.title),make("p", "🏋️ "+item.ex.length+" exercícios · "+item.ex.reduce((n,ex)=>n+ex[1],0)+" séries","muted"));
       const actions=make("div",undefined,"atlas-routine-actions");
-      actions.append(button("Iniciar treino",()=>openRoutine(index),"btn"),button("Editar",()=>{
+      actions.append(button("▶ Iniciar treino",()=>openRoutine(index),"btn"),button("✏️ Editar",()=>{
         if(Object.keys(db.drafts[index]||{}).length || db.activeRoutine===index){notice("Finalize o treino em andamento antes de editar a rotina.");return;}
         startBuilder({step:2,name:item.title,muscle:"Todos",equipment:"Todos",query:"",ex:item.ex.map(x=>x.slice()),edit:index});
       })); training.append(actions);
       item.ex.forEach(([name,sets,reps],i)=>{
         const row=button("",()=>window.atlasGuide(name,window.atlasV2.muscleFor(name)),"atlas-list-button");
-        row.append(make("span",String(i+1).padStart(2,"0"),"atlas-exercise-index"),make("strong",name),make("small",sets+" séries · "+reps+" reps")); training.append(row);
+        row.append(make("span","🏋️","atlas-exercise-index"),make("strong",name),make("small","🔁 "+sets+" séries · "+reps+" reps")); training.append(row);
       });
       const more=make("details",undefined,"atlas-more");more.append(make("summary","Opções da rotina"));
-      more.append(button("Exportar treino",()=>downloadRoutine(item)),button("Duplicar rotina",()=>{
+      more.append(button("📤 Exportar treino",()=>downloadRoutine(item)),button("📋 Duplicar rotina",()=>{
         routine.push({day:"Extra",title:item.title+" (cópia)",ex:item.ex.map(x=>x.slice())});window.atlasV2.saveTemplates();previewIndex=null;renderRoutines();notice("Rotina duplicada.");
-      })); training.append(more);return;
+      })); training.append(more,button("🗑️ Apagar rotina",()=>deleteRoutine(index),"btn atlas-delete-routine"));return;
     }
     const tabs=make("div",undefined,"atlas-tabs");
     ["Rotinas","Montar","Explorar"].forEach(label=>{
@@ -282,9 +314,9 @@
       const card=make("div",undefined,"card atlas-routine-card");
       const title=button(item.title,()=>routinePreview(index),"atlas-routine-title");
       const pending=Object.keys(db.drafts[index]||{}).length>0||db.activeRoutine===index;
-      card.append(title,make("p",item.ex.length+" exercícios · "+item.ex.reduce((sum,ex)=>sum+Number(ex[1]),0)+" séries","muted"));
+      card.append(title,make("p", "🏋️ "+item.ex.length+" exercícios · "+item.ex.reduce((sum,ex)=>sum+Number(ex[1]),0)+" séries","muted"));
       card.append(make("p",item.ex.slice(0,3).map(x=>x[0]).join(" · ")+(item.ex.length>3?"…":""),"atlas-routine-description"));
-      const actions=make("div",undefined,"row");actions.append(button(pending?"Continuar treino":"Iniciar treino",()=>openRoutine(index),"btn"),button("Ver rotina",()=>routinePreview(index),"btn alt"));card.append(actions);training.append(card);
+      const actions=make("div",undefined,"row");actions.append(button(pending?"▶ Continuar treino":"▶ Iniciar treino",()=>openRoutine(index),"btn"),button("📋 Ver rotina",()=>routinePreview(index),"btn alt"));card.append(actions);training.append(card);
     });
     training.append(button("Biblioteca de exercícios →",()=>go("catalog"),"atlas-list-button"));
   }
@@ -410,7 +442,7 @@
       welcome.append(make("p","COMECE NO SEU RITMO","atlas-eyebrow"),make("h2","Um treino do seu jeito."),make("p","Monte sua primeira rotina ou traga um treino que você já tem.","muted"),button("Criar minha rotina",()=>startBuilder(),"btn"),button("Importar treino",()=>importRoutine.click(),"btn alt"),button("Configurar meu perfil →",()=>go("settings"),"atlas-back"));home.append(welcome);
     }else{
       const active=Number.isInteger(db.activeRoutine)&&routine[db.activeRoutine];
-      const hero=make("div",undefined,"card atlas-home-hero");hero.append(make("p",active?"TREINO EM ANDAMENTO":"VAMOS TREINAR?","atlas-eyebrow"),make("h2",active?active.title:"Mais um passo na sua evolução."),button(active?"Continuar treino":"Escolher treino",()=>active?openRoutine(db.activeRoutine):go("routines"),"btn atlas-full"));home.append(hero);
+      const hero=make("div",undefined,"card atlas-home-hero");hero.append(make("p",active?"TREINO EM ANDAMENTO":"VAMOS TREINAR?","atlas-eyebrow"),make("h2",active?active.title:"Mais um passo na sua evolução."),button(active?"▶ Continuar treino":"Escolher treino",()=>active?openRoutine(db.activeRoutine):go("routines"),"btn atlas-full"));home.append(hero);
       const start=new Date();start.setHours(0,0,0,0);start.setDate(start.getDate()-(start.getDay()+6)%7);
       const count=db.sessions.filter(x=>new Date(x.date)>=start).length;
       home.append(make("p",count+" treinos nesta semana"+(db.profile.frequency?" · meta de "+db.profile.frequency:""),"muted"));
