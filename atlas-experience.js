@@ -220,14 +220,36 @@
   let routineTab = "Rotinas";
   let builder = null;
   let previewIndex = null;
+  function discardCurrentWorkout() {
+    const index = Number.isInteger(db.activeRoutine) ? db.activeRoutine : selected;
+    const title = routine[index]?.title || "Treino";
+    if (!confirm('Sair de "' + title + '" sem concluir?\nAs séries e observações desta sessão serão descartadas. A rotina e o histórico salvo serão mantidos. Nenhuma presença será registrada.')) return false;
+    const next = {...db, drafts:{...db.drafts}, workoutNotes:{...db.workoutNotes}, timer:{elapsed:0,startedAt:null}};
+    delete next.drafts[index];
+    delete next.workoutNotes[index];
+    delete next.activeRoutine;
+    try { localStorage.setItem(STORE, JSON.stringify(next)); }
+    catch { notice("Não foi possível encerrar o treino. Tente novamente."); return false; }
+    db = next;
+    restEnd = 0;
+    clearInterval(restTimer);
+    document.getElementById("restClock").textContent = "00:00";
+    const floating=document.getElementById("atlas-floating-rest");
+    if(floating){floating.hidden=true;floating.querySelector("strong").textContent="00:00";}
+    showClock();
+    renderDays(); renderExercises();
+    return true;
+  }
+  const discardButton=button("✕ Sair sem concluir",()=>{
+    if(!discardCurrentWorkout())return;
+    previewIndex=null;routineTab="Rotinas";go("routines");
+    notice("Sessão descartada. Escolha o treino que deseja iniciar.");
+  },"btn atlas-discard-workout");
+  discardButton.id="discardWorkout";
+  document.querySelector("#workout > .atlas-back").after(discardButton);
   function openRoutine(index) {
     if (Number.isInteger(db.activeRoutine) && db.activeRoutine !== index && routine[db.activeRoutine]) {
-      if (!Object.keys(db.drafts[db.activeRoutine]||{}).length && confirm("Encerrar o cronômetro do treino vazio e iniciar esta rotina?")) {
-        db.timer={elapsed:0,startedAt:null};
-      } else {
-        notice("Você tem um treino em andamento. Finalize-o antes de iniciar outra rotina.");
-        index = db.activeRoutine;
-      }
+      if (!discardCurrentWorkout()) return;
     }
     selected = index;
     db.activeRoutine = index;
@@ -245,7 +267,7 @@
     const item = routine[index];
     if (!item) return;
     if (db.activeRoutine === index) {
-      notice("Finalize o treino em andamento antes de apagar esta rotina.");
+      notice("Conclua o treino ou use “Sair sem concluir” antes de apagar esta rotina.");
       return;
     }
     const pending = Object.keys(db.drafts[index] || {}).length > 0;
@@ -282,7 +304,7 @@
       training.append(make("h2",item.title),make("p", "🏋️ "+item.ex.length+" exercícios · "+item.ex.reduce((n,ex)=>n+ex[1],0)+" séries","muted"));
       const actions=make("div",undefined,"atlas-routine-actions");
       actions.append(button("▶ Iniciar treino",()=>openRoutine(index),"btn"),button("✏️ Editar",()=>{
-        if(Object.keys(db.drafts[index]||{}).length || db.activeRoutine===index){notice("Finalize o treino em andamento antes de editar a rotina.");return;}
+        if(Object.keys(db.drafts[index]||{}).length || db.activeRoutine===index){notice("Conclua o treino ou use “Sair sem concluir” antes de editar a rotina.");return;}
         startBuilder({step:2,name:item.title,muscle:"Todos",equipment:"Todos",query:"",ex:item.ex.map(x=>x.slice()),edit:index});
       })); training.append(actions);
       item.ex.forEach(([name,sets,reps],i)=>{

@@ -45,3 +45,5 @@ main{max-width:640px;padding:22px 18px calc(110px + env(safe-area-inset-bottom))
 .atlas-history-entry{border-bottom:1px solid var(--line);padding:6px 0}.atlas-history-exercise{margin:6px 0 6px 12px}.atlas-history-section>summary{font-weight:700;font-size:17px}
 .atlas-chart-choice{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--text);background:transparent;border:0;width:100%;padding:8px 4px;font-size:12px;overflow-wrap:anywhere;min-height:44px}
 .atlas-chart-choice:focus-visible{outline:2px solid var(--accent)}.atlas-bars .atlas-bar-column{min-width:88px;flex:0 0 88px}.atlas-chart-detail{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}.atlas-chart-detail p{font-size:13px;line-height:1.6}
+
+.atlas-discard-workout{display:block;width:100%;margin:10px 0 16px;min-height:46px;border:1px solid #ed9292;background:transparent;color:#ffb4b4}.atlas-discard-workout:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
