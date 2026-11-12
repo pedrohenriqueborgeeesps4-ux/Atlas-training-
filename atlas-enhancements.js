@@ -15,7 +15,7 @@ const library=[
 ["Abdominal na polia","Abdômen","Cabo"],["Abdominal reverso","Abdômen","Peso corporal"],["Prancha","Abdômen","Peso corporal"]
 ];
 const muscles=["Todos","Peito","Costas","Ombros","Bíceps","Tríceps","Quadríceps","Posteriores","Glúteos","Adutores","Panturrilhas","Abdômen","Outros"];
-db.templates=Array.isArray(db.templates)&&db.templates.length>=5?db.templates:routine.map(r=>({day:r.day,title:r.title,ex:r.ex.map(v=>v.slice())}));
+db.templates=Array.isArray(db.templates)?db.templates:[];
 db.exMeta=db.exMeta&&typeof db.exMeta==="object"?db.exMeta:{};
 db.customExercises=Array.isArray(db.customExercises)?db.customExercises:[];
 db.exerciseNotes=db.exerciseNotes&&typeof db.exerciseNotes==="object"?db.exerciseNotes:{};
@@ -73,11 +73,12 @@ if(!shown)libraryList.append(el("p","at-v2-empty","Nenhum exercício encontrado.
 manageBtn.onclick=()=>{libraryPanel.hidden=!libraryPanel.hidden;if(!libraryPanel.hidden){renderLibrary();searchBox.focus();}};
 searchBox.oninput=renderLibrary;muscleSelect.onchange=renderLibrary;
 addCustom.onclick=()=>{const name=(prompt("Nome do novo exercício:")||"").trim().slice(0,70);if(!name)return;if([...library.map(v=>v[0]),...db.customExercises.map(v=>v.name)].some(x=>x.toLocaleLowerCase("pt-BR")===name.toLocaleLowerCase("pt-BR"))){notice("Esse exercício já existe.");return;}const muscle=(prompt("Grupo muscular (ex.: Peito, Costas, Quadríceps):","Outros")||"Outros").trim().slice(0,40);const equipment=(prompt("Equipamento (ex.: Máquina, Barra, Halteres):","Máquina")||"Máquina").trim().slice(0,40);db.customExercises.push({name,muscle,equipment});persist();renderLibrary();notice("Exercício criado. Toque em + para adicioná-lo à ficha.");};
-newRoutine.onclick=()=>{const title=(prompt("Nome da nova ficha:","Treino extra")||"").trim().slice(0,70);if(!title)return;routine.push({day:"Extra "+(routine.length-4),title,ex:[]});selected=routine.length-1;saveTemplates();renderExercises();notice("Ficha criada. Agora adicione exercícios.");};
+newRoutine.onclick=()=>{const title=(prompt("Nome da nova ficha:","Treino extra")||"").trim().slice(0,70);if(!title)return;routine.push({day:"Extra",title,ex:[]});selected=routine.length-1;saveTemplates();renderExercises();notice("Ficha criada. Agora adicione exercícios.");};
 rename.onclick=()=>{const title=(prompt("Novo nome da ficha:",routine[selected].title)||"").trim().slice(0,70);if(!title)return;routine[selected].title=title;saveTemplates();notice("Nome atualizado.");};
 renderExercises=function(){
   const container=$v("exerciseList");container.replaceChildren();const draft=db.drafts[selected]||{};
   sessionNote.value=(db.workoutNotes||{})[selected]||"";
+  if(!routine[selected]){container.append(el("p","at-v2-empty","Crie ou importe seu primeiro treino."));return;}
   if(!routine[selected].ex.length)container.append(el("p","at-v2-empty","Ficha vazia. Use “Adicionar exercício” para começar."));
   routine[selected].ex.forEach(([name,n,reps],i)=>{
     const prior=lastExercise(name),block=el("div","exercise");

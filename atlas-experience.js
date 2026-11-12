@@ -72,7 +72,7 @@
   const renderWorkout = renderExercises;
   renderExercises = function () {
     renderWorkout();
-    workoutHeading.textContent = routine[selected].title;
+    workoutHeading.textContent = routine[selected]?.title || "Seu treino";
   };
   renderExercises();
   const timerCard = document.getElementById("sessionClock").parentElement;
@@ -214,7 +214,6 @@
     });
     if (!items.length) results.append(make("p", "Nenhum exercício com esses filtros. Tente outro nome ou equipamento.", "muted"));
   }
-  const sourceTemplates = window.atlasBaseTemplates.map(item => JSON.parse(JSON.stringify(item)));
   let routineTab = "Minhas rotinas";
   function openRoutine(index) {
     selected = index;
@@ -224,37 +223,16 @@
   }
   function renderRoutines() {
     training.replaceChildren(make("h2", routineTab === "Montar" ? "Nova rotina" : "Meus treinos"));
-    const tabs = make("div", undefined, "atlas-tabs");
-    ["Minhas rotinas", "Explorar"].forEach(label => {
-      const tab = button(label, () => {routineTab = label; renderRoutines();}, "atlas-tab");
-      tab.setAttribute("aria-pressed", String(routineTab === label));
-      tabs.append(tab);
-    });
     if (routineTab === "Montar") {
       training.append(button("← Meus treinos", () => { routineTab = "Minhas rotinas"; renderRoutines(); }, "atlas-back"));
       renderBuilder(); return;
     }
-    training.append(tabs);
-    if (routineTab === "Explorar") {
-      training.append(make("p", "Modelos baseados nas fichas do Atlas. Revise os exercícios antes de adicionar à sua rotina.", "muted"));
-      sourceTemplates.forEach(item => {
-        const card = make("details", undefined, "card");
-        card.append(make("summary", item.title));
-        item.ex.forEach(([name, sets, reps]) => card.append(button(name + " · " + sets + " × " + reps, () => window.atlasGuide(name, window.atlasV2.muscleFor(name)), "atlas-list-button")));
-        const save = button("Adicionar às minhas rotinas", () => {
-          routine.push({day: "Extra", title: item.title, ex: item.ex.map(ex => ex.slice())});
-          window.atlasV2.saveTemplates();
-          save.disabled = true;
-          save.textContent = "Rotina adicionada";
-        }, "btn");
-        card.append(save);
-        training.append(card);
-      });
-      return;
-    }
+
     const create = button("+ Nova rotina", () => {routineTab = "Montar"; renderRoutines();}, "btn");
     const actions = make("div", undefined, "atlas-routine-actions");
-    actions.append(create, button("Exercícios", () => go("catalog"), "btn alt"));
+    actions.append(create, button("Importar treino", () => importRoutine.click(), "btn alt"));
+    training.append(button("Biblioteca de exercícios", () => go("catalog"), "atlas-back"));
+    if(!routine.length) training.append(make("p", "Sua lista está vazia. Crie uma rotina ou importe um arquivo de treino.", "muted"));
     training.append(actions);
     routine.forEach((item, index) => {
       const card = make("div", undefined, "card atlas-routine-card");
@@ -262,6 +240,7 @@
       card.append(make("h3", item.title), make("p", item.ex.length + " exercícios · " + item.ex.reduce((sum, ex) => sum + Number(ex[1]), 0) + " séries", "muted"));
 
       card.append(button(pending ? "Continuar treino →" : "Abrir →", () => openRoutine(index), "atlas-open-routine"));
+      card.append(button("Exportar treino", () => downloadRoutine(item), "atlas-export-routine"));
       training.append(card);
     });
   }
@@ -352,5 +331,65 @@
     db.profile = {...db.profile, name:nameInput.value.trim(), objective:objective.select.value, experience:experience.select.value};
     persist(); notice("Perfil atualizado.");
   }, "btn"));
+  // Keep existing metric elements and their event handlers in the progress page.
+  [...home.children].forEach(node => document.getElementById("progress").append(node));
+  home.replaceChildren();
+  const welcome = make("div", undefined, "card atlas-welcome");
+  welcome.append(make("h2", "Seu treino começa aqui"), make("p", "Configure seu perfil e adicione seu primeiro treino.", "muted"));
+  welcome.append(button("Configurar meu perfil", () => go("settings"), "btn"));
+  welcome.append(button("Criar meu treino", () => {routineTab="Montar";go("routines");}, "btn alt"));
+  welcome.append(button("Importar treino", () => importRoutine.click(), "btn alt"));
+  if(routine.length) welcome.append(button("Acessar meus treinos", () => go("routines"), "atlas-back"));
+  home.append(welcome);
+  const importRoutine = make("input");
+  importRoutine.type="file"; importRoutine.accept=".json,application/json"; importRoutine.hidden=true;
+  home.append(importRoutine);
+  function downloadRoutine(item) {
+    const data={format:"atlas-routine",version:1,routines:[{title:item.title,ex:item.ex}]};
+    const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:"application/json"}));
+    const link=make("a");link.href=url;link.download="atlas-treino.json";link.click();
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
+  }
+  importRoutine.onchange=async () => {
+    const file=importRoutine.files[0]; if(!file)return;
+    try {
+      if(file.size>2000000)throw Error("Use um arquivo de até 2 MB.");
+      const data=JSON.parse(await file.text());
+      const entries=data.format==="atlas-routine"&&data.version===1?data.routines:data.templates;
+      if(!Array.isArray(entries)||!entries.length||entries.length>100)throw Error("O arquivo precisa conter rotinas do Atlas.");
+      const imported=entries.map(item => {
+        if(!item||typeof item.title!=="string"||!item.title.trim()||item.title.length>100||!Array.isArray(item.ex)||item.ex.length>100)throw Error("Rotina inválida no arquivo.");
+        const ex=item.ex.map(entry => {
+          if(!Array.isArray(entry)||typeof entry[0]!=="string"||!entry[0].trim()||entry[0].length>100||!Number.isInteger(entry[1])||entry[1]<1||entry[1]>15||typeof entry[2]!=="string"||!entry[2].trim()||entry[2].length>40)throw Error("Exercício inválido no arquivo.");
+          return [entry[0].trim(),entry[1],entry[2].trim()];
+        });
+        return {day:"Extra",title:item.title.trim(),ex};
+      });
+      if(!confirm("Adicionar "+imported.length+" rotina(s)?\n"+imported.map(item=>item.title).join("\n")))return;
+      const next={...db,templates:[...routine,...imported]};
+      localStorage.setItem(STORE,JSON.stringify(next));
+      db=next;routine.push(...imported);routineTab="Minhas rotinas";go("routines");
+      notice("Treinos importados. Suas cargas serão registradas durante o treino.");
+    }catch(error){notice(error instanceof SyntaxError?"Arquivo JSON inválido.":error.message);}
+    finally{importRoutine.value="";}
+  };
+  const recoveryKey="atlas-before-fresh-start";
+  const resetCard=make("div",undefined,"card");
+  resetCard.append(make("h3","Começar do zero"),make("p","Abra uma experiência vazia neste aparelho. Uma cópia local dos dados atuais ficará disponível para recuperação.","muted"));
+  resetCard.append(button("Começar com perfil vazio",()=>{
+    const message=localStorage.getItem(recoveryKey)?"Começar novamente do zero? A cópia anterior será preservada, mas os registros feitos desde o último recomeço serão apagados. Exporte um backup desses registros antes de continuar.":"Começar com perfil e treinos vazios neste aparelho? Seus dados atuais ficarão em uma cópia local recuperável.";
+    if(!confirm(message))return;
+    try {
+      if(!localStorage.getItem(recoveryKey))localStorage.setItem(recoveryKey,JSON.stringify(db));
+      localStorage.setItem(STORE,JSON.stringify({weights:[],sessions:[],attendance:{},measures:[],drafts:{},templates:[],profile:{goal:null,frequency:null},timer:{elapsed:0,startedAt:null}}));
+      location.reload();
+    }catch(error){notice("Não foi possível preparar o perfil vazio. Exporte um backup e tente novamente.");}
+  },"btn alt"));
+  if(localStorage.getItem(recoveryKey))resetCard.append(button("Recuperar dados anteriores",()=>{
+    if(!confirm("Recuperar os dados anteriores? Exporte o perfil atual em backup se quiser guardar os registros feitos depois do recomeço."))return;
+    try{const previous=localStorage.getItem(recoveryKey);const current=localStorage.getItem(STORE);localStorage.setItem(STORE,previous);localStorage.setItem(recoveryKey,current);location.reload();}catch(error){notice("Não foi possível recuperar os dados.");}
+  },"btn alt"));
+  document.getElementById("settings").append(resetCard);
+  if(routine.length||db.sessions.length||db.weights.length)home.append(button("Testar do zero neste aparelho",()=>{go("settings");resetCard.scrollIntoView();},"atlas-back"));
   go("home");
 })();

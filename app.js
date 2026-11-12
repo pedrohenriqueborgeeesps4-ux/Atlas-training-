@@ -1,13 +1,6 @@
 "use strict";
 const $=id=>document.getElementById(id);
-const routine=[
-{day:1,title:"Peito, ombros e tríceps",ex:[["Supino inclinado com halteres",3,"6–10"],["Supino reto com barra",3,"6–10"],["Crucifixo na máquina",2,"10–15"],["Elevação lateral",4,"10–15"],["Tríceps na polia",3,"8–12"],["Tríceps francês",2,"10–12"]]},
-{day:2,title:"Costas e bíceps",ex:[["Puxada alta aberta",3,"8–12"],["Remada articulada",3,"8–12"],["Remada baixa neutra",3,"8–12"],["Crucifixo inverso",3,"12–15"],["Rosca direta",3,"8–12"],["Rosca martelo",3,"10–12"]]},
-{day:3,title:"Quadríceps e panturrilhas",ex:[["Agachamento no Smith",3,"6–10"],["Leg press 45°",3,"10–12"],["Cadeira extensora",3,"10–15"],["Cadeira adutora",3,"12–15"],["Panturrilha em pé",4,"10–15"]]},
-{day:5,title:"Ombros, braços e peito",ex:[["Desenvolvimento com halteres",3,"8–12"],["Elevação lateral",4,"12–15"],["Supino inclinado na máquina",3,"8–12"],["Rosca Scott",3,"8–12"],["Rosca inclinada",2,"10–12"],["Tríceps testa",3,"8–12"],["Tríceps corda",2,"10–15"]]},
-{day:6,title:"Posteriores, glúteos e panturrilhas",ex:[["Stiff",3,"8–10"],["Mesa flexora",3,"10–12"],["Agachamento búlgaro",3,"8–12"],["Cadeira flexora",2,"10–15"],["Elevação pélvica",3,"8–12"],["Panturrilha sentado",4,"12–15"]]}
-];
-window.atlasBaseTemplates = routine.map(item => ({...item, ex:item.ex.map(ex => ex.slice())}));
+const routine=[];
 const STORE="atlas-training-v1";
 let db={weights:[],sessions:[],attendance:{},measures:[],drafts:{},timer:{elapsed:0,startedAt:null}};
 try{const saved=localStorage.getItem(STORE);if(saved){const obj=JSON.parse(saved);if(obj&&Array.isArray(obj.weights)&&Array.isArray(obj.sessions)&&obj.attendance&&typeof obj.attendance==="object")db={...db,...obj,timer:{...db.timer,...obj.timer}};}}catch(e){}
@@ -39,6 +32,7 @@ function previousExercise(name){
 function renderExercises(){
   $("exerciseList").replaceChildren();
   const draft=db.drafts[selected]||{};
+  if(!routine[selected])return;
   routine[selected].ex.forEach(([name,n,reps],i)=>{
     const block=document.createElement("div");block.className="exercise";
     const h=document.createElement("h3");h.textContent=name;block.append(h);
@@ -127,7 +121,7 @@ function renderSummary(){
    $("remaining").textContent=Math.abs(goal-latest)<.05?"Meta alcançada!":Math.abs(goal-latest).toFixed(1).replace(".",",")+" kg "+(goal>latest?"até sua meta de ganho":"de diferença para sua meta");
  }
  $("sessionsCount").textContent=db.sessions.length;
- const frequency=$("plannedFrequency");if(frequency)frequency.textContent=String(db.profile?.frequency||5);
+ const frequency=$("plannedFrequency");if(frequency)frequency.textContent=String(db.profile?.frequency??"—");
 }
 function monday(){const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()-(d.getDay()+6)%7+weekOffset*7);return d;}
 function renderCalendar(){$("calendar").replaceChildren();const base=monday(),counts={feito:0,falta:0,descanso:0};["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"].forEach((name,i)=>{const d=new Date(base);d.setDate(base.getDate()+i);const key=dateKey(d),state=db.attendance[key]||"pendente";if(state in counts)counts[state]++;const b=document.createElement("button");b.className="date "+state;b.textContent=name+" "+d.getDate()+" "+({feito:"✓",falta:"×",descanso:"—",pendente:"·"}[state]);b.setAttribute("aria-label",key+" "+state);b.onclick=()=>{const seq=["pendente","feito","falta","descanso"];const next=seq[(seq.indexOf(db.attendance[key]||"pendente")+1)%4];if(next==="pendente")delete db.attendance[key];else db.attendance[key]=next;persist();renderCalendar();};$("calendar").append(b);});$("weekSummary").textContent=counts.feito+" realizados · "+counts.falta+" faltas · "+counts.descanso+" descansos";};
