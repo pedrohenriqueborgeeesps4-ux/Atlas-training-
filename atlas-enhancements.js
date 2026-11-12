@@ -86,17 +86,17 @@ renderExercises=function(){
     const guide=el("button","at-v3-guide-button","ⓘ Como fazer");
     guide.type="button";guide.setAttribute("aria-label","Ver como executar "+name);
     guide.onclick=()=>{if(typeof window.atlasGuide==="function")window.atlasGuide(name,muscleFor(name));else notice("Guia indisponível, tente atualizar o aplicativo.");};
-    header.append(heading,guide,musclesChip);block.append(header);
+    header.append(heading,guide);block.append(header);
     const info=el("div","at-v2-tip",n+" séries · "+reps+" reps"+(prior.date?" · anterior: "+new Date(prior.date).toLocaleDateString("pt-BR"):""));block.append(info);
     const priorBest=oldBest(name);
-    const bestLabel=el("div","at-v2-muted",priorBest>0?"Recorde independente: "+priorBest.toLocaleString("pt-BR")+" kg":"Sem recorde independente registrado");block.append(bestLabel);
+    const bestLabel=el("div","at-v2-muted",priorBest>0?"Recorde independente: "+priorBest.toLocaleString("pt-BR")+" kg":"Sem recorde independente registrado");const options=el("details","atlas-exercise-options");options.append(el("summary",null,"Ajustes do exercício"),bestLabel);
     const goalRow=el("div","at-v2-extras");
     const goal=el("input","field");goal.type="number";goal.step=".5";goal.min="0";goal.max="500";goal.style.width="110px";goal.placeholder="Meta (kg)";goal.value=db.targets[name]??"";goal.setAttribute("aria-label","Meta de carga: "+name);
     goal.onchange=()=>{if(goal.value==="")delete db.targets[name];else if(Number(goal.value)>=0&&Number(goal.value)<=500)db.targets[name]=Number(goal.value);persist();};
     const restLabel=el("span","at-v2-muted","Descanso");
     const restSelect=el("select");const restVals=[0,60,90,120,150,180,240,300];restVals.forEach(v=>{const o=el("option",null,v?v+"s":"Off");o.value=v;restSelect.append(o);});restSelect.value=String(db.restByExercise[name]??db.config.defaultRest);restSelect.onchange=()=>{db.restByExercise[name]=Number(restSelect.value);persist();};
-    goalRow.append(goal,restLabel,restSelect);block.append(goalRow);
-    const note=el("textarea","at-v2-note");note.rows=1;note.maxLength=400;note.value=db.exerciseNotes[name]||"";note.placeholder="Nota pessoal do exercício (opcional)";note.onchange=()=>{db.exerciseNotes[name]=note.value.slice(0,400);persist();};block.append(note);
+    goalRow.append(goal,restLabel,restSelect);options.append(goalRow);
+    const note=el("textarea","at-v2-note");note.rows=1;note.maxLength=400;note.value=db.exerciseNotes[name]||"";note.placeholder="Nota pessoal do exercício (opcional)";note.onchange=()=>{db.exerciseNotes[name]=note.value.slice(0,400);persist();};options.append(note);
     const headingRow=el("div","at-v2-setrow muted");["Nº","Carga (kg)","Reps + 🤝","✓"].forEach(t=>headingRow.append(el("span",null,t)));block.append(headingRow);
     for(let j=0;j<n;j++){
       const key=i+"-"+j,v=draft[key]||{},previousSet=prior.sets.find(x=>Number(x.set)===j+1);
@@ -104,7 +104,7 @@ renderExercises=function(){
       folder.open=!v.done;
       const summary=el("summary","at-v3-series-summary");
       function updateFolderSummary(){const current=(db.drafts[selected]||{})[key]||{};
-        summary.textContent=(j+1)+"ª série · "+(current.done?"✓ Concluída · ":"Em andamento · ")+(current.kg??"—")+" kg × "+(current.reps??"—")+" reps"+(current.assisted?" · 🤝":"");
+        summary.textContent=current.done ? "✓ Série "+(j+1)+" · "+(current.kg??"—")+" kg × "+(current.reps??"—")+" reps"+(current.assisted?" · 🤝":"") : "Série "+(j+1);
       }
       updateFolderSummary();folder.append(summary);
       folder.addEventListener("change", updateFolderSummary);
@@ -121,7 +121,7 @@ renderExercises=function(){
       if(previousSet){const previousButton=el("button",null,"↶ Anterior "+(previousSet.kg??"—")+" kg × "+(previousSet.reps??"—")+" reps"+(previousSet.assisted===true?" · 🤝":previousSet.assisted===false?" · sozinho":""));previousButton.type="button";previousButton.onclick=()=>{if(previousSet.kg!==null&&previousSet.kg!==undefined)setDraft(i,j,"kg",previousSet.kg);if(previousSet.reps!==null&&previousSet.reps!==undefined)setDraft(i,j,"reps",previousSet.reps);renderExercises();notice("Valores anteriores copiados.");};previousLine.append(previousButton);}else previousLine.textContent="Anterior: sem registro desta série";folder.append(previousLine);
       const types=el("div","at-v2-extras"),sel=el("select","at-v2-type");[["normal","Normal"],["aquecimento","Aquecimento"],["falha","Até a falha"],["dropset","Drop set"]].forEach(([value,txt])=>{const op=el("option",null,txt);op.value=value;sel.append(op);});sel.value=v.type||"normal";sel.setAttribute("aria-label","Tipo de série "+(j+1));sel.onchange=()=>setDraft(i,j,"type",sel.value);
       const rpe=el("input","at-v2-rpe");rpe.type="number";rpe.min="1";rpe.max="10";rpe.step=".5";rpe.placeholder="RPE";rpe.value=v.rpe??"";rpe.setAttribute("aria-label",name+" série "+(j+1)+" esforço percebido RPE");rpe.oninput=()=>setDraft(i,j,"rpe",rpe.value===""?null:Number(rpe.value));
-      types.append(sel,el("span","at-v2-muted","RPE"),rpe);folder.append(types);block.append(folder);
+      types.append(sel,el("span","at-v2-muted","RPE"),rpe);const seriesOptions=el("details","atlas-series-options");seriesOptions.open=!!v.rpe||!!(v.type&&v.type!=="normal");seriesOptions.append(el("summary",null,"Tipo de série e RPE"),types);folder.append(seriesOptions);block.append(folder);
     }
     const bottom=el("div","at-v2-toolbar");
     const add=el("button",null,"+ Série");add.onclick=()=>{if(n>=15){notice("Limite de 15 séries por exercício.");return;}routine[selected].ex[i][1]=n+1;saveTemplates();renderExercises();};
@@ -129,7 +129,7 @@ renderExercises=function(){
     const up=el("button",null,"↑");up.title="Mover exercício para cima";up.onclick=()=>moveExercise(i,-1);
     const down=el("button",null,"↓");down.title="Mover exercício para baixo";down.onclick=()=>moveExercise(i,1);
     const remove=el("button",null,"Remover");remove.onclick=()=>{if(!confirm("Remover "+name+" desta ficha? O histórico salvo continuará intacto."))return;const draft=db.drafts[selected]||{};if(Object.values(draft).some(v=>v.done)){notice("Finalize o treino antes de remover um exercício da ficha.");return;}routine[selected].ex.splice(i,1);db.drafts[selected]={};saveTemplates();renderExercises();};
-    bottom.append(add,sub,up,down,remove);block.append(bottom);
+    bottom.append(add,sub,up,down,remove);options.append(bottom);block.append(options);
     const details=el("details","at-v2-details");const sum=el("summary",null,"Progressão sugerida");details.append(sum,el("p","at-v2-tip",progression(name,reps)));block.append(details);
     container.append(block);
   });

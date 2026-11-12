@@ -31,6 +31,7 @@
     positions.set(currentPage, window.scrollY);
     originalGo(id);
     currentPage = id;
+    document.body.dataset.screen = id;
     document.body.classList.toggle("atlas-in-workout", id === "workout");
     const navId = ["workout", "routines", "catalog"].includes(id) ? "routines" : ["settings", "progress", "attendance", "profile"].includes(id) ? "profile" : "home";
     document.querySelectorAll("nav [data-page]").forEach(node => {
@@ -56,11 +57,33 @@
   });
   document.getElementById("workout").prepend(button("← Minhas rotinas", () => go("routines"), "atlas-back"));
   document.querySelector("header h1").textContent = "Atlas Training";
-  document.querySelector("header small.accent").textContent = "TREINE. REGISTRE. EVOLUA.";
+  document.querySelector("header small.accent").textContent = "";
   document.querySelector("header > span").remove();
   const homeAction = document.querySelector('#home [data-page="workout"]');
   homeAction.textContent = "Escolher treino";
   homeAction.onclick = () => go("routines");
+  const workout = document.getElementById("workout");
+  const selector = make("details", undefined, "atlas-workout-settings");
+  selector.append(make("summary", "Editar rotina"));
+  const dayButtons = document.getElementById("dayButtons");
+  dayButtons.before(selector);
+  selector.append(dayButtons, workout.querySelector(".at-v2-toolbar"));
+  const workoutHeading = document.getElementById("exerciseList").parentElement.querySelector("h2");
+  const renderWorkout = renderExercises;
+  renderExercises = function () {
+    renderWorkout();
+    workoutHeading.textContent = routine[selected].title;
+  };
+  renderExercises();
+  const timerCard = document.getElementById("sessionClock").parentElement;
+  timerCard.classList.add("atlas-session-timer");
+  const timerOptions = make("details", undefined, "atlas-timer-options");
+  timerOptions.append(make("summary", "Controles"), timerCard.querySelector(".row"));
+  timerCard.append(timerOptions);
+  document.getElementById("restClock").parentElement.hidden = true;
+  const home = document.getElementById("home");
+  homeAction.closest(".card").classList.add("atlas-home-start");
+  home.prepend(homeAction.closest(".card"));
   const guide = window.atlasGuide;
   window.atlasGuide = function (name, muscle) {
     const opener = document.activeElement;
@@ -200,15 +223,18 @@
     go("workout");
   }
   function renderRoutines() {
-    training.replaceChildren(make("h2", "Treino"));
+    training.replaceChildren(make("h2", routineTab === "Montar" ? "Nova rotina" : "Meus treinos"));
     const tabs = make("div", undefined, "atlas-tabs");
-    ["Minhas rotinas", "Explorar", "Montar"].forEach(label => {
+    ["Minhas rotinas", "Explorar"].forEach(label => {
       const tab = button(label, () => {routineTab = label; renderRoutines();}, "atlas-tab");
       tab.setAttribute("aria-pressed", String(routineTab === label));
       tabs.append(tab);
     });
-    training.append(tabs, button("Consultar exercícios", () => go("catalog"), "atlas-list-button"));
-    if (routineTab === "Montar") { renderBuilder(); return; }
+    if (routineTab === "Montar") {
+      training.append(button("← Meus treinos", () => { routineTab = "Minhas rotinas"; renderRoutines(); }, "atlas-back"));
+      renderBuilder(); return;
+    }
+    training.append(tabs);
     if (routineTab === "Explorar") {
       training.append(make("p", "Modelos baseados nas fichas do Atlas. Revise os exercícios antes de adicionar à sua rotina.", "muted"));
       sourceTemplates.forEach(item => {
@@ -227,13 +253,15 @@
       return;
     }
     const create = button("+ Nova rotina", () => {routineTab = "Montar"; renderRoutines();}, "btn");
-    training.append(create);
+    const actions = make("div", undefined, "atlas-routine-actions");
+    actions.append(create, button("Exercícios", () => go("catalog"), "btn alt"));
+    training.append(actions);
     routine.forEach((item, index) => {
       const card = make("div", undefined, "card atlas-routine-card");
       const pending = Object.values(db.drafts[index] || {}).filter(set => set.done).length;
       card.append(make("h3", item.title), make("p", item.ex.length + " exercícios · " + item.ex.reduce((sum, ex) => sum + Number(ex[1]), 0) + " séries", "muted"));
-      card.append(make("p", item.ex.slice(0,3).map(ex => ex[0]).join(" · "), "muted"));
-      card.append(button(pending ? "Continuar · " + pending + " séries feitas" : "Abrir treino", () => openRoutine(index), "btn"));
+
+      card.append(button(pending ? "Continuar treino →" : "Abrir →", () => openRoutine(index), "atlas-open-routine"));
       training.append(card);
     });
   }
@@ -303,7 +331,9 @@
     chartCard.append(tabs);
     if (values.length) {drawBars(chart, values, profileMetric === "Duração" ? "min" : profileMetric === "Volume" ? "kg" : "reps"); chartCard.append(chart, make("p", "Últimos " + values.length + " treinos · " + (profileMetric === "Duração" ? "minutos" : profileMetric === "Volume" ? "carga × repetições, em kg" : "repetições"), "muted"));}
     else chartCard.append(make("p", "Seus gráficos aparecem após salvar o primeiro treino.", "muted"));
-    profile.append(chartCard, make("h3", "Treinos recentes"));
+    const chartDetails = make("details", undefined, "atlas-profile-chart");
+    chartDetails.append(make("summary", "Ver gráficos de evolução"), chartCard);
+    profile.append(chartDetails, make("h3", "Treinos recentes"));
     if (!db.sessions.length) profile.append(button("Escolher meu treino", () => go("routines"), "btn"));
     db.sessions.slice(-10).reverse().forEach(session => {
       const card = make("details", undefined, "card");
