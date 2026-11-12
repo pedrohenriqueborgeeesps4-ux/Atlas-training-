@@ -10,12 +10,13 @@ function setsOf(s){return Array.isArray(s?.sets)?s.sets:[];}
 const historyPage=$a("progress");
 const historyCard=$a("sessionHistory")?.parentElement;
 if(!historyCard)return;
-const panel=el("div","card");panel.id="at-v2-analytics";panel.append(el("h2",null,"Estatísticas e recordes"));
+const panel=el("div","card");panel.id="at-v2-analytics";panel.append(el("h2",null,"Seu progresso em números"));
 const stat=el("div","at-v2-stat");
-const views=[["0","Volume registrado"],["0","Séries registradas"],["0","Tempo de treino"]];
+const views=[["0","Carga acumulada em todos os treinos"],["0","Séries salvas (inclui aquecimento)"],["0","Tempo total registrado"]];
 views.forEach(([n,t],i)=>{const box=el("div");const number=el("div","at-v2-num",n);number.id="at-v2-kpi-"+i;box.append(number,el("div","at-v2-label",t));stat.append(box);});
 panel.append(stat);
-const legend=el("p","at-v2-muted","Volume de treino = soma de carga × repetições (sem séries de aquecimento). É um indicador aproximado, não mede esforço real ou equivalência entre exercícios.");
+const legend=el("p","at-v2-muted","Carga acumulada = carga × repetições, somadas em todos os treinos salvos. Ex.: 20 kg × 10 repetições = 200 kg; três séries assim somam 600 kg. Não é o peso levantado de uma vez. Aquecimento não entra; séries com ajuda entram. Cargas não preenchidas não acrescentam volume. Compare principalmente o mesmo exercício, pois esse total não mede esforço.");
+const scope=el("p","at-v2-muted");panel.append(scope);
 panel.append(legend);
 const pickerLabel=el("label",null,"Analisar exercício");pickerLabel.setAttribute("for","at-v2-pick");
 const picker=el("select","field");picker.id="at-v2-pick";
@@ -24,7 +25,7 @@ const graphDesc=el("p","at-v2-muted");
 const exerciseStats=el("div");
 panel.append(pickerLabel,picker,graph,graphDesc,exerciseStats);
 const muscles=el("div");muscles.style.marginTop="15px";
-panel.append(el("h3",null,"Volume por grupo muscular (últimas 4 semanas)"),muscles);
+panel.append(el("h3",null,"Séries por grupo muscular (últimos 28 dias, sem aquecimento)"),muscles);
 historyPage.insertBefore(panel,historyCard);
 const utilities=el("div","card");utilities.append(el("h2",null,"Exportar histórico"));
 const csv=el("button","at-v2-btn","Baixar treinos em CSV");csv.onclick=()=>{
@@ -47,9 +48,13 @@ function renderLine(values){
   const horizontal=document.createElementNS(chartNS,"line");horizontal.setAttribute("x1","20");horizontal.setAttribute("x2","300");horizontal.setAttribute("y1","122");horizontal.setAttribute("y2","122");horizontal.setAttribute("stroke","#74858d");graph.append(horizontal);
   if(points.length>1){const line=document.createElementNS(chartNS,"polyline");line.setAttribute("points",points.map(p=>p.x+","+p.y).join(" "));line.setAttribute("fill","none");line.setAttribute("stroke","#dfff00");line.setAttribute("stroke-width","3");graph.append(line);}
   points.forEach(p=>{const dot=document.createElementNS(chartNS,"circle");dot.setAttribute("cx",p.x);dot.setAttribute("cy",p.y);dot.setAttribute("r","4");dot.setAttribute("fill","#dfff00");graph.append(dot);});
-  graphDesc.textContent="Últimas "+data.length+" sessões · carga máxima independente de cada sessão: "+fmt(data.at(-1).max)+" kg.";
+  graphDesc.textContent=picker.value+" · maior carga sem ajuda em cada treino (sem aquecimento). Último registro: "+fmt(data.at(-1).max)+" kg em "+date(data.at(-1).date)+".";
+  const list=el("details","atlas-history-entry");list.append(el("summary",null,"Ver datas e cargas do gráfico"));
+  data.forEach(item=>list.append(el("p",null,date(item.date)+" · "+fmt(item.max)+" kg")));
+  graphDesc.append(list);
 }
 function renderAnalytics(){
+  scope.textContent=db.sessions.length+" treinos salvos · todo o histórico deste aparelho.";
   const all=db.sessions.flatMap(s=>setsOf(s));
   const normal=all.filter(v=>v.type!=="aquecimento");
   const volume=normal.reduce((a,v)=>a+(Number.isFinite(Number(v.kg))&&Number.isFinite(Number(v.reps))?Math.max(0,Number(v.kg))*Math.max(0,Number(v.reps)):0),0);
@@ -60,8 +65,13 @@ function renderAnalytics(){
   const old=picker.value;picker.replaceChildren();names.forEach(name=>{const op=el("option",null,name);op.value=name;picker.append(op);});if(names.includes(old))picker.value=old;
   const selectedName=picker.value,rows=records(selectedName);renderLine(rows);
   exerciseStats.replaceChildren();
+  exerciseStats.append(el("p","at-v2-muted","Resultados de "+(selectedName||"um exercício")+" em todo o histórico. Aqui entram apenas séries sem ajuda e sem aquecimento."));
   if(rows.length){const best=Math.max(...rows.flatMap(r=>r.sets.map(v=>Number(v.kg)))),total=rows.reduce((a,r)=>a+r.volume,0),maxReps=Math.max(...rows.flatMap(r=>r.sets.map(v=>Number(v.reps))));
-    [ ["Recorde de carga independente",fmt(best)+" kg"],["Maior número de repetições",maxReps+" reps"],["Volume histórico",fmt(total)+" kg"] ].forEach(([k,v])=>{const row=el("div","at-v2-row");row.append(el("span",null,k),el("strong",null,v));exerciseStats.append(row);});}
+    [ ["🏆 Maior carga em uma série sem ajuda",fmt(best)+" kg"],["🔁 Mais repetições em uma única série",maxReps+" reps"],["🏋️ Carga acumulada neste exercício (sem ajuda)",fmt(total)+" kg"] ].forEach(([k,v])=>{const row=el("div","at-v2-row");row.append(el("span",null,k),el("strong",null,v));exerciseStats.append(row);});}
+  if(rows.length){
+    const bestSet=rows.flatMap(row=>row.sets.map(set=>({...set,date:row.date}))).sort((a,b)=>Number(b.kg)-Number(a.kg))[0];
+    exerciseStats.append(el("p","at-v2-muted","Maior carga registrada: "+fmt(bestSet.kg)+" kg × "+bestSet.reps+" repetições em "+date(bestSet.date)+"."));
+  }
   muscles.replaceChildren();const cutoff=Date.now()-28*24*3600*1000,map=new Map();
   db.sessions.forEach(s=>{const stamp=new Date(s.date).getTime();if(!Number.isFinite(stamp)||stamp<cutoff)return;setsOf(s).forEach(v=>{if(v.type==="aquecimento")return;const muscle=window.atlasV2?.muscleFor?.(v.name)||"Outros";map.set(muscle,(map.get(muscle)||0)+1);});});
   const arr=[...map.entries()].sort((a,b)=>b[1]-a[1]),highest=Math.max(1,...arr.map(x=>x[1]));if(!arr.length){muscles.append(el("p","at-v2-empty","Seus grupos musculares aparecerão aqui após registrar treinos."));return;}

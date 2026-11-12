@@ -127,7 +127,29 @@ function monday(){const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()-
 function renderCalendar(){$("calendar").replaceChildren();const base=monday(),counts={feito:0,falta:0,descanso:0};["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"].forEach((name,i)=>{const d=new Date(base);d.setDate(base.getDate()+i);const key=dateKey(d),state=db.attendance[key]||"pendente";if(state in counts)counts[state]++;const b=document.createElement("button");b.className="date "+state;b.textContent=name+" "+d.getDate()+" "+({feito:"✓",falta:"×",descanso:"—",pendente:"·"}[state]);b.setAttribute("aria-label",key+" "+state);b.onclick=()=>{const seq=["pendente","feito","falta","descanso"];const next=seq[(seq.indexOf(db.attendance[key]||"pendente")+1)%4];if(next==="pendente")delete db.attendance[key];else db.attendance[key]=next;persist();renderCalendar();};$("calendar").append(b);});$("weekSummary").textContent=counts.feito+" realizados · "+counts.falta+" faltas · "+counts.descanso+" descansos";};
 $("previousWeek").onclick=()=>{weekOffset--;renderCalendar();};$("followingWeek").onclick=()=>{weekOffset++;renderCalendar();};$("currentWeek").onclick=()=>{weekOffset=0;renderCalendar();};
 function addLine(parent,text){const el=document.createElement("div");el.className="divider";el.textContent=text;parent.append(el);}
-function renderHistory(){$("weightHistory").replaceChildren();db.weights.slice().reverse().forEach(x=>addLine($("weightHistory"),new Date(x.date).toLocaleDateString("pt-BR")+" · "+x.kg+" kg"));$("sessionHistory").replaceChildren();if(!db.sessions.length)addLine($("sessionHistory"),"Nenhum treino registrado.");db.sessions.slice().reverse().forEach(s=>{addLine($("sessionHistory"),new Date(s.date).toLocaleDateString("pt-BR")+" · "+(s.routineTitle||routine[s.day]?.title||"Treino")+" · "+format(s.seconds));if(s.notes)addLine($("sessionHistory"),"📝 "+s.notes);s.sets.forEach(v=>addLine($("sessionHistory"),v.name+" · série "+v.set+" · "+(v.kg??"—")+" kg · "+(v.reps??"—")+" reps"+(v.assisted===true?" · 🤝 com ajuda":v.assisted===false?" · sozinho":"")+(v.type&&v.type!=="normal"?" · "+v.type:"")+(v.rpe!=null?" · RPE "+v.rpe:"")));});$("measureHistory").replaceChildren();db.measures.slice().reverse().forEach(m=>addLine($("measureHistory"),new Date(m.date).toLocaleDateString("pt-BR")+" · cintura "+m.waist+" cm · braço "+m.arm+" cm"));}
+function renderHistory(){
+  $("weightHistory").replaceChildren();
+  db.weights.slice().reverse().forEach(x=>addLine($("weightHistory"),new Date(x.date).toLocaleDateString("pt-BR")+" · "+x.kg+" kg"));
+  $("sessionHistory").replaceChildren();
+  if(!db.sessions.length)addLine($("sessionHistory"),"Nenhum treino registrado.");
+  db.sessions.slice().reverse().forEach(s=>{
+    const card=document.createElement("details");card.className="atlas-history-entry";
+    const heading=document.createElement("summary");
+    heading.textContent="🏋️ "+(s.routineTitle||routine[s.day]?.title||"Treino")+" · "+new Date(s.date).toLocaleDateString("pt-BR")+" · "+format(s.seconds||0);
+    card.append(heading);
+    if(s.notes)addLine(card,"📝 "+s.notes);
+    const sets=s.sets||[];
+    [...new Set(sets.map(v=>v.name))].forEach(name=>{
+      const exercise=document.createElement("details");exercise.className="atlas-history-exercise";
+      const label=document.createElement("summary");label.textContent=name+" · "+sets.filter(v=>v.name===name).length+" séries";exercise.append(label);
+      sets.filter(v=>v.name===name).forEach(v=>addLine(exercise,"Série "+v.set+" · "+(v.kg??"—")+" kg × "+(v.reps??"—")+" repetições"+(v.assisted?" · 🤝 com ajuda":"")+(v.type&&v.type!=="normal"?" · "+v.type:"")));
+      card.append(exercise);
+    });
+    $("sessionHistory").append(card);
+  });
+  $("measureHistory").replaceChildren();
+  db.measures.slice().reverse().forEach(m=>addLine($("measureHistory"),new Date(m.date).toLocaleDateString("pt-BR")+" · cintura "+m.waist+" cm · braço "+m.arm+" cm"));
+}
 $("saveMeasures").onclick=()=>{const waist=Number($("waist").value),arm=Number($("arm").value);if(waist<40||waist>200||arm<10||arm>100){notice("Informe medidas válidas.");return;}db.measures.push({date:new Date().toISOString(),waist,arm});persist();renderHistory();notice("Medidas salvas.");};
 $("exportBackup").onclick=()=>{const blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="atlas-training-backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);};
 $("importBackup").onclick=()=>$("backupFile").click();

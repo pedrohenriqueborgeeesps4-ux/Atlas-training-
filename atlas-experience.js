@@ -393,14 +393,45 @@
       tab.setAttribute("aria-pressed", String(profileMetric === label)); tabs.append(tab);
     });
     const chart = make("div", undefined, "atlas-bars");
-    const values = db.sessions.slice(-8).map(session => {
-      const sets = (session.sets || []).filter(set => set.type !== "aquecimento");
-      const value = profileMetric === "Duração" ? (session.seconds || 0) / 60 : sets.reduce((sum,set) => sum + (Number(set.reps) || 0) * (profileMetric === "Volume" ? Number(set.kg) || 0 : 1),0);
-      return {date:session.date, value};
+    const sessions = db.sessions.slice(-8);
+    const explanations = {
+      "Duração":"⏱️ Tempo registrado no cronômetro de cada treino, em minutos.",
+      "Volume":"🏋️ Carga acumulada: somamos carga × repetições de cada série. Ex.: 20 kg × 10 repetições = 200 kg. Não é o peso levantado de uma vez nem uma medida de esforço.",
+      "Repetições":"🔁 Total de repetições de todos os exercícios daquele treino. Ex.: 3 séries de 10 = 30 repetições."
+    };
+    chartCard.append(tabs,make("p",explanations[profileMetric],"muted"));
+    if(profileMetric!=="Duração")chartCard.append(make("p","Séries de aquecimento ficam fora desta soma; séries com ajuda entram. Carga não preenchida não acrescenta volume.","muted"));
+    const detail=make("div",undefined,"atlas-chart-detail");
+    function showSession(session){
+      detail.replaceChildren(make("h3",session.routineTitle||routine[session.day]?.title||"Treino"),make("p",new Date(session.date).toLocaleString("pt-BR")));
+      const sets=(session.sets||[]).filter(x=>x.type!=="aquecimento");
+      detail.append(make("p","⏱️ "+Math.round((session.seconds||0)/60)+" min · "+sets.length+" séries sem aquecimento"));
+      const breakdown=make("details");breakdown.append(make("summary","Ver como o total foi calculado"));
+      [...new Set(sets.map(x=>x.name))].forEach(name=>{
+        const group=sets.filter(x=>x.name===name);
+        const reps=group.reduce((n,x)=>n+(Number(x.reps)||0),0);
+        const volume=group.reduce((n,x)=>n+(Number(x.kg)||0)*(Number(x.reps)||0),0);
+        breakdown.append(make("p",name+" · "+reps+" repetições · "+volume.toLocaleString("pt-BR")+" kg acumulados"));
+      });
+      detail.append(breakdown);
+    }
+    const values=sessions.map(session=>{
+      const sets=(session.sets||[]).filter(set=>set.type!=="aquecimento");
+      return {date:session.date,value:profileMetric==="Duração"?(session.seconds||0)/60:sets.reduce((sum,set)=>sum+(Number(set.reps)||0)*(profileMetric==="Volume"?Number(set.kg)||0:1),0)};
     });
-    chartCard.append(tabs);
-    if (values.length) {drawBars(chart, values, profileMetric === "Duração" ? "min" : profileMetric === "Volume" ? "kg" : "reps"); chartCard.append(chart, make("p", "Últimos " + values.length + " treinos · " + (profileMetric === "Duração" ? "minutos" : profileMetric === "Volume" ? "carga × repetições, em kg" : "repetições"), "muted"));}
-    else chartCard.append(make("p", "Seus gráficos aparecem após salvar o primeiro treino.", "muted"));
+    if(values.length){
+      const unit=profileMetric==="Duração"?"min":profileMetric==="Volume"?"kg acumulados":"repetições";
+      drawBars(chart,values,unit);
+      [...chart.children].forEach((column,i)=>{
+        const session=sessions[i],title=session.routineTitle||routine[session.day]?.title||"Treino";
+        const choice=button(title,()=>showSession(session),"atlas-chart-choice");
+        choice.setAttribute("aria-label",title+", "+new Date(session.date).toLocaleDateString("pt-BR")+", "+values[i].value.toLocaleString("pt-BR",{maximumFractionDigits:1})+" "+unit+". Ver detalhes");
+        choice.append(...column.childNodes);column.append(choice);
+        column.onclick=()=>showSession(session);
+      });
+      chartCard.append(make("p","Cada barra é um treino. Toque no nome para ver os detalhes. Últimos "+values.length+" treinos.","muted"),chart,detail);
+      showSession(sessions.at(-1));
+    }else chartCard.append(make("p","Seus gráficos aparecem após salvar o primeiro treino.","muted"));
     profile.insertBefore(chartCard, actions);
     profile.append(make("h3", "Treinos recentes"));
     if (!db.sessions.length) profile.append(button("Escolher meu treino", () => go("routines"), "btn"));
@@ -423,13 +454,21 @@
   }, "btn"));
   // Keep existing metric elements and their event handlers in the progress page.
   [...home.children].forEach(node => document.getElementById("progress").append(node));
+  ["weightHistory","sessionHistory","measureHistory"].forEach(id=>{
+    const content=document.getElementById(id);
+    const fold=make("details",undefined,"atlas-history-section");
+    const title=id==="weightHistory"?"⚖️ Histórico de peso":id==="sessionHistory"?"🏋️ Histórico de treinos e cargas":"📏 Histórico de medidas";
+    fold.append(make("summary",title));
+    if(id!=="measureHistory")content.parentElement.querySelector("h2")?.remove();
+    content.before(fold);fold.append(content);
+  });
   home.replaceChildren();
   function sessionCard(session) {
     const card=make("div",undefined,"card atlas-session-card");
     card.append(make("small",new Date(session.date).toLocaleDateString("pt-BR",{day:"numeric",month:"long"})),make("h3",session.routineTitle||routine[session.day]?.title||"Treino"));
     const sets=session.sets||[];
     const volume=sets.filter(x=>x.type!=="aquecimento").reduce((n,x)=>n+(Number(x.kg)||0)*(Number(x.reps)||0),0);
-    card.append(make("p",Math.round((session.seconds||0)/60)+" min · "+volume.toLocaleString("pt-BR")+" kg de volume · "+sets.length+" séries","accent"));
+    card.append(make("p",Math.round((session.seconds||0)/60)+" min · "+volume.toLocaleString("pt-BR")+" kg acumulados · "+sets.length+" séries","accent"));
     const detail=make("details");detail.append(make("summary","Ver exercícios"));
     [...new Set(sets.map(x=>x.name))].forEach(name=>detail.append(button(name,()=>window.atlasGuide(name,window.atlasV2.muscleFor(name)),"atlas-list-button")));
     card.append(detail);return card;
