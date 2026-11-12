@@ -26,6 +26,7 @@
   const profile = page("profile", "Seu perfil");
   const originalGo = go;
   const positions = new Map();
+  const preferences = page("preferences", "Configurações");
   let currentPage = "home";
   go = function (id) {
     positions.set(currentPage, window.scrollY);
@@ -33,11 +34,12 @@
     currentPage = id;
     document.body.dataset.screen = id;
     document.body.classList.toggle("atlas-in-workout", id === "workout");
-    const navId = ["workout", "routines", "catalog"].includes(id) ? "routines" : ["settings", "progress", "attendance", "profile"].includes(id) ? "profile" : "home";
+    const navId = ["workout", "routines", "catalog"].includes(id) ? "routines" : ["settings", "progress", "attendance", "profile", "preferences"].includes(id) ? "profile" : "home";
     document.querySelectorAll("nav [data-page]").forEach(node => {
       node.classList.toggle("active", node.dataset.page === navId);
       node.setAttribute("aria-current", node.dataset.page === navId ? "page" : "false");
     });
+    if (id === "home") renderHome();
     if (id === "routines") renderRoutines();
     if (id === "profile") renderProfile();
     if (id === "catalog") renderCatalog();
@@ -74,7 +76,8 @@
     renderWorkout();
     workoutHeading.textContent = routine[selected]?.title || "Seu treino";
   };
-  renderExercises();
+  if(Number.isInteger(db.activeRoutine)&&routine[db.activeRoutine])selected=db.activeRoutine;
+  renderDays();renderExercises();
   const timerCard = document.getElementById("sessionClock").parentElement;
   timerCard.classList.add("atlas-session-timer");
   const timerOptions = make("details", undefined, "atlas-timer-options");
@@ -214,82 +217,138 @@
     });
     if (!items.length) results.append(make("p", "Nenhum exercício com esses filtros. Tente outro nome ou equipamento.", "muted"));
   }
-  let routineTab = "Minhas rotinas";
+  let routineTab = "Rotinas";
+  let builder = null;
+  let previewIndex = null;
   function openRoutine(index) {
+    if (Number.isInteger(db.activeRoutine) && db.activeRoutine !== index && routine[db.activeRoutine]) {
+      if (!Object.keys(db.drafts[db.activeRoutine]||{}).length && confirm("Encerrar o cronômetro do treino vazio e iniciar esta rotina?")) {
+        db.timer={elapsed:0,startedAt:null};
+      } else {
+        notice("Você tem um treino em andamento. Finalize-o antes de iniciar outra rotina.");
+        index = db.activeRoutine;
+      }
+    }
     selected = index;
-    renderDays();
-    renderExercises();
-    go("workout");
+    db.activeRoutine = index;
+    if (!db.timer.startedAt) db.timer.startedAt = Date.now();
+    persist(); renderDays(); renderExercises(); showClock(); go("workout");
+  }
+  function startBuilder(seed) {
+    builder = seed || {step:0,name:"",muscle:"Todos",equipment:"Todos",query:"",ex:[]};
+    routineTab="Montar"; previewIndex=null; go("routines");
+  }
+  function routinePreview(index) {
+    previewIndex=index; renderRoutines(); window.scrollTo(0,0);
   }
   function renderRoutines() {
-    training.replaceChildren(make("h2", routineTab === "Montar" ? "Nova rotina" : "Meus treinos"));
-    if (routineTab === "Montar") {
-      training.append(button("← Meus treinos", () => { routineTab = "Minhas rotinas"; renderRoutines(); }, "atlas-back"));
-      renderBuilder(); return;
+    training.replaceChildren(make("h2", "Treino"));
+    if (routineTab === "Montar") {renderBuilder();return;}
+    if (previewIndex !== null && routine[previewIndex]) {
+      const item=routine[previewIndex], index=previewIndex;
+      training.append(button("← Rotinas",()=>{previewIndex=null;renderRoutines();},"atlas-back"));
+      training.append(make("h2",item.title),make("p",item.ex.length+" exercícios · "+item.ex.reduce((n,ex)=>n+ex[1],0)+" séries","muted"));
+      const actions=make("div",undefined,"atlas-routine-actions");
+      actions.append(button("Iniciar treino",()=>openRoutine(index),"btn"),button("Editar",()=>{
+        if(Object.keys(db.drafts[index]||{}).length || db.activeRoutine===index){notice("Finalize o treino em andamento antes de editar a rotina.");return;}
+        startBuilder({step:2,name:item.title,muscle:"Todos",equipment:"Todos",query:"",ex:item.ex.map(x=>x.slice()),edit:index});
+      })); training.append(actions);
+      item.ex.forEach(([name,sets,reps],i)=>{
+        const row=button("",()=>window.atlasGuide(name,window.atlasV2.muscleFor(name)),"atlas-list-button");
+        row.append(make("span",String(i+1).padStart(2,"0"),"atlas-exercise-index"),make("strong",name),make("small",sets+" séries · "+reps+" reps")); training.append(row);
+      });
+      const more=make("details",undefined,"atlas-more");more.append(make("summary","Opções da rotina"));
+      more.append(button("Exportar treino",()=>downloadRoutine(item)),button("Duplicar rotina",()=>{
+        routine.push({day:"Extra",title:item.title+" (cópia)",ex:item.ex.map(x=>x.slice())});window.atlasV2.saveTemplates();previewIndex=null;renderRoutines();notice("Rotina duplicada.");
+      })); training.append(more);return;
     }
-
-    const create = button("+ Nova rotina", () => {routineTab = "Montar"; renderRoutines();}, "btn");
-    const actions = make("div", undefined, "atlas-routine-actions");
-    actions.append(create, button("Importar treino", () => importRoutine.click(), "btn alt"));
-    training.append(button("Biblioteca de exercícios", () => go("catalog"), "atlas-back"));
-    if(!routine.length) training.append(make("p", "Sua lista está vazia. Crie uma rotina ou importe um arquivo de treino.", "muted"));
-    training.append(actions);
-    routine.forEach((item, index) => {
-      const card = make("div", undefined, "card atlas-routine-card");
-      const pending = Object.values(db.drafts[index] || {}).filter(set => set.done).length;
-      card.append(make("h3", item.title), make("p", item.ex.length + " exercícios · " + item.ex.reduce((sum, ex) => sum + Number(ex[1]), 0) + " séries", "muted"));
-
-      card.append(button(pending ? "Continuar treino →" : "Abrir →", () => openRoutine(index), "atlas-open-routine"));
-      card.append(button("Exportar treino", () => downloadRoutine(item), "atlas-export-routine"));
-      training.append(card);
+    const tabs=make("div",undefined,"atlas-tabs");
+    ["Rotinas","Montar","Explorar"].forEach(label=>{
+      const tab=button(label,()=>{if(label==="Montar"){startBuilder();return;}routineTab=label;previewIndex=null;renderRoutines();},"atlas-tab");
+      tab.setAttribute("aria-pressed",String(routineTab===label)); tabs.append(tab);
+    }); training.append(tabs);
+    if(routineTab==="Explorar") {
+      training.append(make("h3","Encontre seus exercícios"),make("p","Explore por equipamento e consulte a execução e seu histórico.","muted"));
+      const groups=make("div",undefined,"atlas-equipment-grid");
+      [["Peso corporal","Em casa"],["Halteres","Com halteres"],["Barra","Com barra"],["Máquina","Máquinas"],["Cabo","Polias"],["Todos","Biblioteca completa"]].forEach(([equipment,label],i)=>{
+        const tile=button("",()=>{equipmentFilter.select.value=equipment;muscleFilter.select.value="Todos";search.value="";go("catalog");},"atlas-equipment");
+        tile.append(make("span",["⌂","Ⅱ","━","▥","↕","＋"][i],"atlas-equipment-icon"),make("strong",label),make("small","Ver exercícios →"));groups.append(tile);
+      });training.append(groups,button("Montar uma rotina",()=>startBuilder(),"btn atlas-full"));return;
+    }
+    training.append(button("+ Nova rotina",()=>startBuilder(),"btn atlas-full"));
+    const subtitle=make("div",undefined,"row between atlas-section-heading");subtitle.append(make("h3","Minhas rotinas"),button("Importar",()=>importRoutine.click(),"atlas-back"));training.append(subtitle);
+    if(!routine.length){const empty=make("div",undefined,"atlas-empty");empty.append(make("div","▤","atlas-empty-icon"),make("h3","Seu próximo treino começa aqui"),make("p","Crie sua rotina ou importe um arquivo do Atlas. Você escolhe os exercícios, séries e repetições.","muted"));training.append(empty);}
+    routine.forEach((item,index)=>{
+      const card=make("div",undefined,"card atlas-routine-card");
+      const title=button(item.title,()=>routinePreview(index),"atlas-routine-title");
+      const pending=Object.keys(db.drafts[index]||{}).length>0||db.activeRoutine===index;
+      card.append(title,make("p",item.ex.length+" exercícios · "+item.ex.reduce((sum,ex)=>sum+Number(ex[1]),0)+" séries","muted"));
+      card.append(make("p",item.ex.slice(0,3).map(x=>x[0]).join(" · ")+(item.ex.length>3?"…":""),"atlas-routine-description"));
+      const actions=make("div",undefined,"row");actions.append(button(pending?"Continuar treino":"Iniciar treino",()=>openRoutine(index),"btn"),button("Ver rotina",()=>routinePreview(index),"btn alt"));card.append(actions);training.append(card);
     });
+    training.append(button("Biblioteca de exercícios →",()=>go("catalog"),"atlas-list-button"));
   }
   function renderBuilder() {
-    const form = make("form", undefined, "card atlas-builder");
-    const nameLabel = make("label", "Nome da rotina");
-    const name = make("input", undefined, "field");
-    name.required = true;
-    name.maxLength = 70;
-    nameLabel.append(name);
-    const target = selectField("Foco da rotina", ["Todos", ...new Set(allExercises().map(item => item.muscle))]);
-    const equipment = selectField("Equipamento", ["Todos", ...new Set(allExercises().map(item => item.equipment))]);
-    const chosen = new Set();
-    const list = make("div", undefined, "atlas-builder-list");
-    const preview = make("p", "Selecione os exercícios para revisar sua rotina.", "muted");
-    function refresh() {
-      list.replaceChildren();
-      allExercises().filter(item => (target.select.value === "Todos" || item.muscle === target.select.value) && (equipment.select.value === "Todos" || item.equipment === equipment.select.value)).forEach(item => {
-        const label = make("label", undefined, "atlas-choice");
-        const check = make("input"); check.type = "checkbox"; check.checked = chosen.has(item.name);
-        check.onchange = () => {
-          if (check.checked) chosen.add(item.name); else chosen.delete(item.name);
-          preview.textContent = chosen.size ? [...chosen].join(" · ") : "Selecione os exercícios para revisar sua rotina.";
-        };
-        label.append(check, make("span", item.name)); list.append(label);
+    builder ||= {step:0,name:"",muscle:"Todos",equipment:"Todos",query:"",ex:[]};
+    const draft=builder;
+    training.append(button("← "+(draft.step?"Voltar":"Rotinas"),()=>{if(draft.step){draft.step--;renderRoutines();}else{routineTab="Rotinas";renderRoutines();}},"atlas-back"));
+    training.append(make("p","ETAPA "+(draft.step+1)+" DE 3","atlas-eyebrow"));
+    const steps=make("div",undefined,"atlas-steps");[0,1,2].forEach(i=>steps.append(make("span","",i<=draft.step?"active":"")));training.append(steps);
+    training.append(make("h2",["Dê um nome à sua rotina","Escolha os exercícios","Revise sua rotina"][draft.step]));
+    const form=make("form",undefined,"atlas-builder");training.append(form);
+    if(draft.step===0){
+      const label=make("label","Nome da rotina");const name=make("input",undefined,"field");name.required=true;name.maxLength=70;name.value=draft.name;name.placeholder="Ex.: Superiores A";name.oninput=()=>draft.name=name.value;label.append(name);
+      const target=selectField("Grupo muscular",["Todos",...new Set(allExercises().map(x=>x.muscle))],draft.muscle);
+      const equipment=selectField("Equipamento",["Todos",...new Set(allExercises().map(x=>x.equipment))],draft.equipment);
+      target.select.onchange=()=>draft.muscle=target.select.value;equipment.select.onchange=()=>draft.equipment=equipment.select.value;
+      form.append(label,target.wrapper,equipment.wrapper,make("p","Os filtros ajudam a buscar. Você pode combinar equipamentos e grupos na próxima etapa.","muted"));
+    }else if(draft.step===1){
+      const query=make("input",undefined,"field");query.type="search";query.placeholder="Buscar exercício";query.setAttribute("aria-label","Buscar exercícios para rotina");query.value=draft.query;
+      const target=selectField("Grupo",["Todos",...new Set(allExercises().map(x=>x.muscle))],draft.muscle);
+      const equipment=selectField("Equipamento",["Todos",...new Set(allExercises().map(x=>x.equipment))],draft.equipment);
+      const filters=make("div",undefined,"grid");filters.append(target.wrapper,equipment.wrapper);
+      const count=make("p","","accent");count.setAttribute("aria-live","polite");
+      const list=make("div",undefined,"atlas-picker-list");
+      function refresh(){list.replaceChildren();count.textContent=draft.ex.length+" exercícios selecionados";
+        allExercises().filter(item=>normalize(item.name).includes(normalize(draft.query))&&(draft.muscle==="Todos"||item.muscle===draft.muscle)&&(draft.equipment==="Todos"||item.equipment===draft.equipment)).forEach(item=>{
+          const row=make("label",undefined,"atlas-choice");const check=make("input");check.type="checkbox";check.checked=draft.ex.some(x=>x[0]===item.name);
+          check.onchange=()=>{if(check.checked)draft.ex.push([item.name,3,"8–12"]);else draft.ex=draft.ex.filter(x=>x[0]!==item.name);count.textContent=draft.ex.length+" exercícios selecionados";};
+          const text=make("span");text.append(make("strong",item.name),make("small",item.muscle+" · "+item.equipment));row.append(check,text);list.append(row);
+        });if(!list.children.length)list.append(make("p","Nenhum exercício encontrado. Ajuste os filtros.","muted"));
+      }
+      query.oninput=()=>{draft.query=query.value;refresh();};target.select.onchange=()=>{draft.muscle=target.select.value;refresh();};equipment.select.onchange=()=>{draft.equipment=equipment.select.value;refresh();};
+      form.append(query,filters,count,list);refresh();
+    }else{
+      form.append(make("h3",draft.name),make("p","Ajuste séries, repetições e ordem antes de salvar.","muted"));
+      draft.ex.forEach((ex,i)=>{
+        const card=make("div",undefined,"card atlas-review-exercise");card.append(make("h3",ex[0]));
+        const fields=make("div",undefined,"grid");const setsLabel=make("label","Séries"),repsLabel=make("label","Repetições");
+        const sets=make("input",undefined,"field");sets.type="number";sets.min=1;sets.max=15;sets.required=true;sets.value=ex[1];sets.oninput=()=>ex[1]=Number(sets.value);
+        const reps=make("input",undefined,"field");reps.required=true;reps.maxLength=40;reps.value=ex[2];reps.oninput=()=>ex[2]=reps.value;setsLabel.append(sets);repsLabel.append(reps);fields.append(setsLabel,repsLabel);card.append(fields);
+        const actions=make("div",undefined,"row");[-1,1].forEach(dir=>{const move=button(dir===-1?"↑ Subir":"↓ Descer",()=>{const j=i+dir;if(j<0||j>=draft.ex.length)return;[draft.ex[i],draft.ex[j]]=[draft.ex[j],draft.ex[i]];renderRoutines();},"atlas-back");move.disabled=i+dir<0||i+dir>=draft.ex.length;actions.append(move);});
+        actions.append(button("Remover",()=>{draft.ex.splice(i,1);renderRoutines();},"atlas-back"));card.append(actions);form.append(card);
       });
-      if (!list.children.length) list.append(make("p", "Nenhum exercício com esses filtros."));
+      form.append(button("+ Adicionar exercícios",()=>{draft.step=1;renderRoutines();},"atlas-list-button"));
     }
-    target.select.onchange = refresh; equipment.select.onchange = refresh;
-    const sets = selectField("Séries iniciais por exercício", ["1", "2", "3", "4", "5"], "3");
-    const repsLabel = make("label", "Faixa de repetições");
-    const reps = make("input", undefined, "field"); reps.value = "8–12"; reps.maxLength = 20; reps.required = true; repsLabel.append(reps);
-    const save = make("button", "Salvar rotina", "btn"); save.type = "submit";
-    form.onsubmit = event => {
-      event.preventDefault();
-      if (!name.value.trim() || !reps.value.trim() || !chosen.size) {preview.textContent = "Preencha o nome, a faixa de repetições e escolha ao menos um exercício."; return;}
-      routine.push({day:"Extra", title:name.value.trim(), ex:[...chosen].map(ex => [ex, Number(sets.select.value), reps.value.trim()])});
-      window.atlasV2.saveTemplates();
-      routineTab = "Minhas rotinas";
-      openRoutine(routine.length - 1);
-      notice("Rotina criada. Ajuste séries e descanso na ficha quando precisar.");
+    const next=make("button",draft.step===2?"Salvar rotina":"Continuar","btn atlas-full atlas-builder-next");next.type="submit";form.append(next);
+    form.onsubmit=event=>{event.preventDefault();
+      if(draft.step===0&&!draft.name.trim())return;
+      if(draft.step===1&&!draft.ex.length){notice("Selecione pelo menos um exercício.");return;}
+      if(draft.step<2){draft.step++;renderRoutines();window.scrollTo(0,0);return;}
+      if(!draft.ex.length||draft.ex.some(x=>!Number.isInteger(x[1])||x[1]<1||x[1]>15||!x[2].trim())){notice("Confira as séries e repetições.");return;}
+      const item={day:"Extra",title:draft.name.trim(),ex:draft.ex.map(x=>x.slice())};
+      if(Number.isInteger(draft.edit))routine[draft.edit]=item;else routine.push(item);
+      previewIndex=Number.isInteger(draft.edit)?draft.edit:routine.length-1;
+      window.atlasV2.saveTemplates();builder=null;routineTab="Rotinas";renderRoutines();window.scrollTo(0,0);notice("Rotina salva.");
     };
-    form.append(nameLabel, target.wrapper, equipment.wrapper, list, make("h3", "Revisar rotina"), preview, sets.wrapper, repsLabel, save);
-    training.append(form); refresh();
   }
   let profileMetric = "Duração";
   function renderProfile() {
     profile.replaceChildren(make("h2", db.profile.name || "Seu perfil"));
-    profile.append(make("p", "Perfil e registros salvos neste aparelho", "muted"));
+    const hero=make("div",undefined,"atlas-profile-hero");
+    hero.append(make("div",(db.profile.name||"A").slice(0,1).toUpperCase(),"atlas-avatar"));
+    [[db.sessions.length,"treinos"],[routine.length,"rotinas"],[db.profile.frequency||"—","meta semanal"]].forEach(([value,label])=>{const stat=make("div");stat.append(make("strong",String(value)),make("small",label));hero.append(stat);});
+    profile.append(hero,button("Configurações",()=>go("preferences"),"atlas-back"));
     const actions = make("div", undefined, "grid");
     [["Editar perfil", "settings"], ["Estatísticas", "progress"], ["Exercícios", "catalog"], ["Calendário", "attendance"]].forEach(([label,id]) => actions.append(button(label, () => go(id))));
     actions.append(button("Medidas", () => {go("progress"); document.getElementById("waist").closest(".card").scrollIntoView();}));
@@ -310,9 +369,8 @@
     chartCard.append(tabs);
     if (values.length) {drawBars(chart, values, profileMetric === "Duração" ? "min" : profileMetric === "Volume" ? "kg" : "reps"); chartCard.append(chart, make("p", "Últimos " + values.length + " treinos · " + (profileMetric === "Duração" ? "minutos" : profileMetric === "Volume" ? "carga × repetições, em kg" : "repetições"), "muted"));}
     else chartCard.append(make("p", "Seus gráficos aparecem após salvar o primeiro treino.", "muted"));
-    const chartDetails = make("details", undefined, "atlas-profile-chart");
-    chartDetails.append(make("summary", "Ver gráficos de evolução"), chartCard);
-    profile.append(chartDetails, make("h3", "Treinos recentes"));
+    profile.insertBefore(chartCard, actions);
+    profile.append(make("h3", "Treinos recentes"));
     if (!db.sessions.length) profile.append(button("Escolher meu treino", () => go("routines"), "btn"));
     db.sessions.slice(-10).reverse().forEach(session => {
       const card = make("details", undefined, "card");
@@ -334,13 +392,33 @@
   // Keep existing metric elements and their event handlers in the progress page.
   [...home.children].forEach(node => document.getElementById("progress").append(node));
   home.replaceChildren();
-  const welcome = make("div", undefined, "card atlas-welcome");
-  welcome.append(make("h2", "Seu treino começa aqui"), make("p", "Configure seu perfil e adicione seu primeiro treino.", "muted"));
-  welcome.append(button("Configurar meu perfil", () => go("settings"), "btn"));
-  welcome.append(button("Criar meu treino", () => {routineTab="Montar";go("routines");}, "btn alt"));
-  welcome.append(button("Importar treino", () => importRoutine.click(), "btn alt"));
-  if(routine.length) welcome.append(button("Acessar meus treinos", () => go("routines"), "atlas-back"));
-  home.append(welcome);
+  function sessionCard(session) {
+    const card=make("div",undefined,"card atlas-session-card");
+    card.append(make("small",new Date(session.date).toLocaleDateString("pt-BR",{day:"numeric",month:"long"})),make("h3",session.routineTitle||routine[session.day]?.title||"Treino"));
+    const sets=session.sets||[];
+    const volume=sets.filter(x=>x.type!=="aquecimento").reduce((n,x)=>n+(Number(x.kg)||0)*(Number(x.reps)||0),0);
+    card.append(make("p",Math.round((session.seconds||0)/60)+" min · "+volume.toLocaleString("pt-BR")+" kg de volume · "+sets.length+" séries","accent"));
+    const detail=make("details");detail.append(make("summary","Ver exercícios"));
+    [...new Set(sets.map(x=>x.name))].forEach(name=>detail.append(button(name,()=>window.atlasGuide(name,window.atlasV2.muscleFor(name)),"atlas-list-button")));
+    card.append(detail);return card;
+  }
+  function renderHome() {
+    home.replaceChildren(importRoutine);
+    home.append(make("h2",db.profile.name?"Olá, "+db.profile.name:"Seu espaço de treino"));
+    if(!routine.length&&!db.sessions.length){
+      const welcome=make("div",undefined,"card atlas-welcome");
+      welcome.append(make("p","COMECE NO SEU RITMO","atlas-eyebrow"),make("h2","Um treino do seu jeito."),make("p","Monte sua primeira rotina ou traga um treino que você já tem.","muted"),button("Criar minha rotina",()=>startBuilder(),"btn"),button("Importar treino",()=>importRoutine.click(),"btn alt"),button("Configurar meu perfil →",()=>go("settings"),"atlas-back"));home.append(welcome);
+    }else{
+      const active=Number.isInteger(db.activeRoutine)&&routine[db.activeRoutine];
+      const hero=make("div",undefined,"card atlas-home-hero");hero.append(make("p",active?"TREINO EM ANDAMENTO":"VAMOS TREINAR?","atlas-eyebrow"),make("h2",active?active.title:"Mais um passo na sua evolução."),button(active?"Continuar treino":"Escolher treino",()=>active?openRoutine(db.activeRoutine):go("routines"),"btn atlas-full"));home.append(hero);
+      const start=new Date();start.setHours(0,0,0,0);start.setDate(start.getDate()-(start.getDay()+6)%7);
+      const count=db.sessions.filter(x=>new Date(x.date)>=start).length;
+      home.append(make("p",count+" treinos nesta semana"+(db.profile.frequency?" · meta de "+db.profile.frequency:""),"muted"));
+    }
+    const heading=make("div",undefined,"row between atlas-section-heading");heading.append(make("h3","Sua atividade"),button("Calendário",()=>go("attendance"),"atlas-back"));home.append(heading);
+    if(db.sessions.length)db.sessions.slice(-5).reverse().forEach(s=>home.append(sessionCard(s)));
+    else home.append(make("p","Seus treinos concluídos aparecerão aqui. Os registros ficam neste aparelho.","muted"));
+  }
   const importRoutine = make("input");
   importRoutine.type="file"; importRoutine.accept=".json,application/json"; importRoutine.hidden=true;
   home.append(importRoutine);
@@ -368,7 +446,7 @@
       if(!confirm("Adicionar "+imported.length+" rotina(s)?\n"+imported.map(item=>item.title).join("\n")))return;
       const next={...db,templates:[...routine,...imported]};
       localStorage.setItem(STORE,JSON.stringify(next));
-      db=next;routine.push(...imported);routineTab="Minhas rotinas";go("routines");
+      db=next;routine.push(...imported);routineTab="Rotinas";previewIndex=null;go("routines");
       notice("Treinos importados. Suas cargas serão registradas durante o treino.");
     }catch(error){notice(error instanceof SyntaxError?"Arquivo JSON inválido.":error.message);}
     finally{importRoutine.value="";}
@@ -391,5 +469,28 @@
   },"btn alt"));
   document.getElementById("settings").append(resetCard);
   if(routine.length||db.sessions.length||db.weights.length)home.append(button("Testar do zero neste aparelho",()=>{go("settings");resetCard.scrollIntoView();},"atlas-back"));
+  // Dedicated settings routes keep calculators, backup and profile out of the workout.
+  const settings=document.getElementById("settings");
+  const cards=[...settings.children].filter(node=>node.classList.contains("card"));
+  preferences.append(button("← Perfil",()=>go("profile"),"atlas-back"));
+  cards.forEach((card,index)=>{
+    const label=card.querySelector("h2,h3")?.textContent||"Preferências";
+    preferences.append(button(label+" →",()=>{go("settings");cards.forEach(node=>node.hidden=node!==card);window.scrollTo(0,0);},"atlas-list-button"));
+  });
+  const back=settings.querySelector(".atlas-back");back.textContent="← Configurações";back.onclick=()=>go("preferences");
+  const goWithSettings=go;
+  go=function(id){if(id==="settings")cards.forEach((card,index)=>card.hidden=index!==0);goWithSettings(id);};
+  const finish=document.getElementById("finishWorkout");const saveWorkout=finish.onclick;
+  finish.onclick=()=>{
+    const before=db.sessions.length;saveWorkout();
+    if(db.sessions.length>before){delete db.activeRoutine;restEnd=0;clearInterval(restTimer);document.getElementById("restClock").textContent="00:00";persist();go("home");notice("Treino salvo. Confira o resumo em Sua atividade.");}
+  };
+  const sessionNotes=document.getElementById("v2-sessionnote");
+  const notes=make("details",undefined,"atlas-more");notes.append(make("summary","Observações do treino"));
+  sessionNotes.previousElementSibling.remove();sessionNotes.before(notes);notes.append(sessionNotes);
+  let noticeTimeout;
+  const originalNotice=notice;
+  notice=function(message){originalNotice(message);clearTimeout(noticeTimeout);noticeTimeout=setTimeout(()=>document.getElementById("status").textContent="",6500);};
   go("home");
+
 })();
