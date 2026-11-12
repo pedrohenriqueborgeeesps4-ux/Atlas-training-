@@ -7,10 +7,11 @@ const routine=[
 {day:5,title:"Ombros, braços e peito",ex:[["Desenvolvimento com halteres",3,"8–12"],["Elevação lateral",4,"12–15"],["Supino inclinado na máquina",3,"8–12"],["Rosca Scott",3,"8–12"],["Rosca inclinada",2,"10–12"],["Tríceps testa",3,"8–12"],["Tríceps corda",2,"10–15"]]},
 {day:6,title:"Posteriores, glúteos e panturrilhas",ex:[["Stiff",3,"8–10"],["Mesa flexora",3,"10–12"],["Agachamento búlgaro",3,"8–12"],["Cadeira flexora",2,"10–15"],["Elevação pélvica",3,"8–12"],["Panturrilha sentado",4,"12–15"]]}
 ];
+window.atlasBaseTemplates = routine.map(item => ({...item, ex:item.ex.map(ex => ex.slice())}));
 const STORE="atlas-training-v1";
 let db={weights:[],sessions:[],attendance:{},measures:[],drafts:{},timer:{elapsed:0,startedAt:null}};
 try{const saved=localStorage.getItem(STORE);if(saved){const obj=JSON.parse(saved);if(obj&&Array.isArray(obj.weights)&&Array.isArray(obj.sessions)&&obj.attendance&&typeof obj.attendance==="object")db={...db,...obj,timer:{...db.timer,...obj.timer}};}}catch(e){}
-if(!db.profile||typeof db.profile!=="object")db.profile={goal:db.weights.length?94:null};
+if(!db.profile||typeof db.profile!=="object")db.profile={goal:null};
 let selected=0,weekOffset=0,restEnd=0,restTimer=null;
 function notice(msg){$("status").textContent=msg;}
 function persist(){try{localStorage.setItem(STORE,JSON.stringify(db));}catch(e){notice("Não foi possível salvar. Exporte um backup.");}renderSummary();}
