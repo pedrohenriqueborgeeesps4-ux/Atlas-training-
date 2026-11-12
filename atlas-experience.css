@@ -47,3 +47,9 @@ main{max-width:640px;padding:22px 18px calc(110px + env(safe-area-inset-bottom))
 .atlas-chart-choice:focus-visible{outline:2px solid var(--accent)}.atlas-bars .atlas-bar-column{min-width:88px;flex:0 0 88px}.atlas-chart-detail{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}.atlas-chart-detail p{font-size:13px;line-height:1.6}
 
 .atlas-discard-workout{display:block;width:100%;margin:10px 0 16px;min-height:46px;border:1px solid #ed9292;background:transparent;color:#ffb4b4}.atlas-discard-workout:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+
+/* Accessible controls and readable narrow-screen layouts */
+button:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.atlas-profile-hero>div{min-width:0}.atlas-profile-hero small{overflow-wrap:anywhere}
+.atlas-history-section .at-v2-row{flex-wrap:wrap;gap:10px}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}

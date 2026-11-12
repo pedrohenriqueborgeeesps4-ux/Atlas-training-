@@ -23,17 +23,17 @@ function warm(){const kg=Number(warmInput.value);if(!(kg>0&&kg<=500)){warmResult
 warmInput.addEventListener("input",warm);warm();box.append(tools);
 const history=$t("sessionHistory");
 const card=el("div","card");card.append(el("h2",null,"Gerenciar treinos salvos"),el("p","at-v2-muted","Você pode corrigir séries salvas ou apagar uma sessão. Antes de alterações importantes, exporte um backup."));
-const manager=el("div");card.append(manager);
+const manager=el("details","atlas-history-section");manager.append(el("summary",null,"Editar ou excluir sessões"));const savedList=el("div");manager.append(savedList);card.append(manager);
 history?.parentElement?.after(card);
 function renderSaved(){
-manager.replaceChildren();
-if(!db.sessions.length){manager.append(el("p","at-v2-empty","Nenhum treino registrado."));return;}
+savedList.replaceChildren();
+if(!db.sessions.length){savedList.append(el("p","at-v2-empty","Nenhum treino registrado."));return;}
 db.sessions.slice().reverse().forEach((s,reverseIndex)=>{
 const idx=db.sessions.length-1-reverseIndex;const title=el("div","at-v2-row");
 const name=s.routineTitle||routine[s.day]?.title||"Treino";
 const when=new Date(s.date).toLocaleDateString("pt-BR");
 title.append(el("span",null,when+" · "+name));
-const actions=el("div");const edit=el("button","at-mini","Editar");const del=el("button","at-mini","Excluir");actions.append(edit,del);title.append(actions);manager.append(title);
+const actions=el("div");const edit=el("button","at-mini","Editar");const del=el("button","at-mini","Excluir");actions.append(edit,del);title.append(actions);savedList.append(title);
 del.onclick=()=>{if(!confirm("Excluir DEFINITIVAMENTE este treino do histórico? Faça backup antes, se necessário."))return;db.sessions.splice(idx,1);persist();renderSaved();if(typeof renderHistory==="function")renderHistory();if(window.atlasRefreshAnalytics)window.atlasRefreshAnalytics();notice("Treino excluído do histórico.");};
 edit.onclick=()=>{const staged=JSON.parse(JSON.stringify(s));
  const editor=el("div","at-v2-library");const note=el("textarea","at-v2-note");note.rows=2;note.value=s.notes||"";note.placeholder="Observações da sessão";editor.append(note);
@@ -44,5 +44,6 @@ edit.onclick=()=>{const staged=JSON.parse(JSON.stringify(s));
 };
 });
 }
+window.atlasRefreshSaved=renderSaved;
 const navProgress=document.querySelectorAll('[data-page="progress"]');navProgress.forEach(b=>b.addEventListener("click",renderSaved));renderSaved();
 })();

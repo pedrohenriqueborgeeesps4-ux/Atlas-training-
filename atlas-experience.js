@@ -43,7 +43,7 @@
     if (id === "routines") renderRoutines();
     if (id === "profile") renderProfile();
     if (id === "catalog") renderCatalog();
-    if (id === "progress") window.atlasRefreshAnalytics?.();
+    if (id === "progress") { window.atlasRefreshAnalytics?.(); window.atlasRefreshSaved?.(); }
     window.scrollTo(0, positions.get(id) || 0);
   };
   const nav = document.querySelector("nav");
@@ -248,12 +248,14 @@
   discardButton.id="discardWorkout";
   document.querySelector("#workout > .atlas-back").after(discardButton);
   function openRoutine(index) {
+    if(!routine[index]?.ex.length){notice("Adicione um exercício à rotina antes de iniciar.");return;}
     if (Number.isInteger(db.activeRoutine) && db.activeRoutine !== index && routine[db.activeRoutine]) {
       if (!discardCurrentWorkout()) return;
     }
+    const resuming = db.activeRoutine === index;
     selected = index;
     db.activeRoutine = index;
-    if (!db.timer.startedAt) db.timer.startedAt = Date.now();
+    if (!resuming && !db.timer.startedAt) db.timer.startedAt = Date.now();
     persist(); renderDays(); renderExercises(); showClock(); go("workout");
   }
   function startBuilder(seed) {
@@ -471,9 +473,11 @@
   const objective = selectField("Objetivo", ["Escolher depois", "Ganhar massa muscular", "Ganhar força", "Condicionamento"], db.profile.objective);
   const experience = selectField("Experiência", ["Escolher depois", "Iniciante", "Intermediário", "Avançado"], db.profile.experience);
   profileCard.append(nameLabel, objective.wrapper, experience.wrapper, button("Salvar perfil", () => {
+    if(!window.atlasSaveGoals?.())return;
     db.profile = {...db.profile, name:nameInput.value.trim(), objective:objective.select.value, experience:experience.select.value};
     persist(); notice("Perfil atualizado.");
   }, "btn"));
+  profileCard.querySelector("[data-save-goals]")?.remove();
   // Keep existing metric elements and their event handlers in the progress page.
   [...home.children].forEach(node => document.getElementById("progress").append(node));
   ["weightHistory","sessionHistory","measureHistory"].forEach(id=>{
