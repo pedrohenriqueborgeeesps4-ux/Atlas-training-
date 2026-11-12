@@ -512,10 +512,31 @@
       const count=db.sessions.filter(x=>new Date(x.date)>=start).length;
       home.append(make("p",count+" treinos nesta semana"+(db.profile.frequency?" · meta de "+db.profile.frequency:""),"muted"));
     }
+    if(!db.onboardingDone&&!db.sessions.length){
+      const setup=make("div",undefined,"card");setup.id="atlas-first-steps";
+      setup.append(make("h3","Primeiros passos"),make("p",routine.length?"1. Rotina pronta ✓ · 2. Ajuste o descanso · 3. Comece seu treino":"1. Crie ou importe sua rotina acima · 2. Ajuste o descanso","muted"));
+      const label=make("label","Descanso padrão entre séries");const rest=make("select",undefined,"field");rest.id="atlas-setup-rest";
+      [60,90,120,150,180,240,300].forEach(seconds=>{const option=make("option",seconds+" segundos");option.value=seconds;rest.append(option);});rest.value=String(db.config.defaultRest);label.append(rest);
+      const autoLabel=make("label");const auto=make("input");auto.type="checkbox";auto.checked=db.config.autoRest;autoLabel.append(auto,document.createTextNode(" Iniciar descanso ao concluir uma série"));
+      setup.append(label,autoLabel,make("p","O descanso individual de cada exercício continua valendo quando configurado.","muted"),button("Salvar e escolher treino",()=>{if(rest.value)db.config.defaultRest=Number(rest.value);db.config.autoRest=auto.checked;db.onboardingDone=true;if(!persist()){db.onboardingDone=false;return;}renderExercises();go("routines");},"btn"));home.append(setup);
+    }
+    const dataStatus=make("div",undefined,"card");dataStatus.id="atlas-data-status";home.append(dataStatus);renderDataStatus();
     const heading=make("div",undefined,"row between atlas-section-heading");heading.append(make("h3","Sua atividade"),button("Calendário",()=>go("attendance"),"atlas-back"));home.append(heading);
     if(db.sessions.length)db.sessions.slice(-5).reverse().forEach(s=>home.append(sessionCard(s)));
     else home.append(make("p","Seus treinos concluídos aparecerão aqui. Os registros ficam neste aparelho.","muted"));
   }
+  function renderDataStatus(){
+    const card=document.getElementById("atlas-data-status");if(!card)return;
+    const date=value=>value&&Number.isFinite(Date.parse(value))?new Date(value).toLocaleString("pt-BR"):null;
+    const saved=date(db.lastSavedAt),backup=date(db.lastBackupExportAt);
+    card.replaceChildren(make("h3","Seus dados neste aparelho"),make("p",window.atlasSaveFailed?"Não foi possível gravar as últimas alterações. Exporte um backup agora.":saved?"Último salvamento local: "+saved:"Seus registros são salvos neste navegador.",window.atlasSaveFailed?"accent":"muted"));
+    const active=Number.isInteger(db.activeRoutine)&&routine[db.activeRoutine];
+    if(active)card.append(make("p","Sessão em andamento: "+active.title+(db.timer.startedAt?" · cronômetro rodando":" · cronômetro pausado")));
+    card.append(make("p",backup?"Última exportação solicitada: "+backup:"Nenhum backup exportado por esta versão ainda.","muted"),make("p","Salvar aqui não cria uma cópia na nuvem. Para trocar de celular, exporte e guarde o arquivo. Confira se o download terminou.","muted"),button("Exportar backup",()=>document.getElementById("exportBackup").click(),"btn alt"));
+  }
+  // Refresh only when the persisted status changes; never interrupt focus every second.
+  let dataStatusSignature="";
+  setInterval(()=>{const signature=JSON.stringify([db.lastSavedAt,db.lastBackupExportAt,window.atlasSaveFailed,db.activeRoutine,!!db.timer.startedAt]);if(signature!==dataStatusSignature&&!document.getElementById("atlas-data-status")?.contains(document.activeElement)){dataStatusSignature=signature;renderDataStatus();}},1000);
   const importRoutine = make("input");
   importRoutine.type="file"; importRoutine.accept=".json,application/json"; importRoutine.hidden=true;
   home.append(importRoutine);
